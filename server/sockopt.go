@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -52,7 +53,9 @@ func listenerToFd(l *net.TCPListener) int {
 
 func tcpConnToFd(tcp *net.TCPConn) int {
 	n := reflect.ValueOf(*tcp)
-	return connToFd(n.FieldByName("conn"))
+	cdf := connToFd(n.FieldByName("conn"))
+	log.Error("SOCKOPT: %s", cdf)
+	return cdf
 }
 
 func SetTcpMD5SigSockopts(l *net.TCPListener, address string, key string) error {
