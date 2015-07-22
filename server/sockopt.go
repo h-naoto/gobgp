@@ -58,9 +58,38 @@ func tcpConnToFd(tcp *net.TCPConn) int {
 	return cdf
 }
 
+func setFd(family uint16) (int error){
+	syscall.ForkLock.RLock()
+	s, err := syscall.Socket(family, syscall.SOCK_STREAM , 0)
+	if err == nil {
+		syscall.CloseOnExec(s)
+	}
+	syscall.ForkLock.RUnlock()
+	if err != nil {
+		return -1, err
+	}
+	if err = syscall.SetNonblock(s, true); err != nil {
+		syscall.Close(s)
+		return -1, err
+	}
+	return s, nil
+}
+
 func SetTcpMD5SigSockopts(l *net.TCPListener, address string, key string) error {
 	t, _ := buildTcpMD5Sig(address, key)
 	_, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT, uintptr(listenerToFd(l)),
+		uintptr(syscall.IPPROTO_TCP), uintptr(TCP_MD5SIG),
+		uintptr(unsafe.Pointer(&t)), unsafe.Sizeof(t), 0)
+	return e
+}
+
+func SetTcpMD5SigSockoptsConn(address string, key string) error {
+	t, _ := buildTcpMD5Sig(address, key)
+	fd, e:= setFd(t.ss_family)
+	if e != nil {
+		return e
+	}
+	_, _, e = syscall.Syscall6(syscall.SYS_SETSOCKOPT, uintptr(fd),
 		uintptr(syscall.IPPROTO_TCP), uintptr(TCP_MD5SIG),
 		uintptr(unsafe.Pointer(&t)), unsafe.Sizeof(t), 0)
 	return e
