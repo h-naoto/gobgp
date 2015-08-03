@@ -279,7 +279,7 @@ class GoBGPTestBase(unittest.TestCase):
         g2.add_peer(g1, passive=True, passwd='gobgp')
         g1.add_peer(g2, passwd='gobgp')
         g1.wait_for(expected_state=BGP_FSM_ESTABLISHED, peer=g2)
-        
+
 if __name__ == '__main__':
     if os.geteuid() is not 0:
         print "you are not root."

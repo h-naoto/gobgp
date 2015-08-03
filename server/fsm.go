@@ -219,7 +219,8 @@ func (fsm *FSM) connectLoop() error {
 				host = "[" + addr.String() + "]:" + strconv.Itoa(bgp.BGP_PORT)
 			}
 
-			conn, err := net.DialTimeout("tcp", host, time.Duration(MIN_CONNECT_RETRY-1)*time.Second)
+//			conn, err := net.DialTimeout("tcp", host, time.Duration(MIN_CONNECT_RETRY-1)*time.Second)
+			conn, err := MD5DialTimeout("tcp", host, time.Duration(MIN_CONNECT_RETRY-1)*time.Second, fsm.pConf.NeighborConfig.AuthPassword)
 			if err == nil {
 				isEBGP := fsm.gConf.GlobalConfig.As != fsm.pConf.NeighborConfig.PeerAs
 				if isEBGP {

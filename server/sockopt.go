@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+	"github.com/bouk/monkey"
 )
 
 const (
@@ -71,4 +72,19 @@ func SetTcpTTLSockopts(conn *net.TCPConn, ttl int) error {
 		name = syscall.IPV6_UNICAST_HOPS
 	}
 	return os.NewSyscallError("setsockopt", syscall.SetsockoptInt(tcpConnToFd(conn), level, name, ttl))
+}
+
+func MD5DialTimeout(proto string, host string, time int, key string){
+	t, _ := buildTcpMD5Sig(host, key)
+	mySyscall := func (trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err syscall.Errno) {
+		a4 = uintptr(unsafe.Pointer(&t))
+		return 0, 0, syscall.ENOSYS
+	}
+	monkey.Patch(syscall.Syscall6, mySyscall)
+	conn, err := net.DialTimeout(proto, host, time)
+	monkey.Unpatch(syscall.Syscall6)
+	if err != nil{
+		return nil, err
+	}
+	return conn, nil
 }
