@@ -16,12 +16,14 @@
 package server
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/table"
 	"github.com/osrg/gobgp/zebra"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type broadcastZapiMsg struct {
@@ -84,6 +86,41 @@ func newIPRouteMessage(path *table.Path) *zebra.Message {
 	}
 }
 
+func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInfo) *table.Path {
+
+	header := m.Header
+	body := m.Body.(*zebra.IPv4RouteRedistributeBody)
+
+	var nlri bgp.AddrPrefixInterface
+	pattr := make([]bgp.PathAttributeInterface, 0)
+	var mpnlri *bgp.PathAttributeMpReachNLRI
+	var isWithdraw bool = false
+
+	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
+	pattr = append(pattr, origin)
+
+	switch header.Command {
+	case zebra.IPV4_ROUTE_ADD:
+		nlri = bgp.NewNLRInfo(body.PrefixLength, body.Prefix.String())
+		nexthop := bgp.NewPathAttributeNextHop("0.0.0.0")
+		log.Infof("nexthop %v ", nexthop)
+		pattr = append(pattr, nexthop)
+
+	case zebra.IPV6_ROUTE_ADD:
+		p := bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
+		mpnlri = bgp.NewPathAttributeMpReachNLRI("::", []bgp.AddrPrefixInterface{p})
+		pattr = append(pattr, mpnlri)
+	}
+
+	med := bgp.NewPathAttributeMultiExitDisc(body.Metric)
+	pattr = append(pattr, med)
+
+	// TODO: investigate noimplicit withdraw
+	p := table.NewPath(peerInfo, nlri, isWithdraw, pattr, false, time.Now(), true)
+	p.IsFromZebra = true
+	return p
+}
+
 func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapiMsg {
 	if cli == nil {
 		return nil
@@ -98,5 +135,25 @@ func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapi
 	}
 }
 
-func handleZapiMsg(msg *zebra.Message) {
+func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
+	log.Infof("receive message from zebra %v", msg)
+
+	switch b := msg.Body.(type){
+	case *zebra.IPv4RouteRedistributeBody:
+		pi := &table.PeerInfo{
+			AS:      server.bgpConfig.Global.GlobalConfig.As,
+			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
+		}
+
+		log.Infof("receive message from zebra prefix %v", b.Prefix )
+		log.Infof("receive message from zebra nexthops %v", b.Nexthops)
+		if b.Prefix != nil && b.Type != zebra.ROUTE_KERNEL{
+			p := createPathFromRedistributeMessage(msg, pi)
+			msgs := server.propagateUpdate("", false, []*table.Path{p})
+			log.Infof("receive message from zebra msgs length %d", len(msgs))
+			return msgs
+		}
+	}
+
+	return nil
 }

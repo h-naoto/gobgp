@@ -226,7 +226,7 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 				log.Error("failed to read header: ", err)
 				return err
 			}
-
+			log.Infof("read header from zebra: %v", headerBuf)
 			hd := &Header{}
 			err = hd.DecodeFromBytes(headerBuf)
 			if err != nil {
@@ -239,7 +239,7 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 				log.Error("failed to read body: ", err)
 				return err
 			}
-
+			log.Infof("read body from zebra: %v", bodyBuf)
 			m, err := ParseMessage(hd, bodyBuf)
 			if err != nil {
 				log.Warn("failed to parse message: ", err)
@@ -272,6 +272,9 @@ func (c *Client) Send(m *Message) {
 }
 
 func (c *Client) SendCommand(command API_TYPE, body Body) error {
+
+	log.Infof("sending %v", command)
+
 	m := &Message{
 		Header: Header{
 			Len:     HEADER_SIZE,
@@ -288,7 +291,7 @@ func (c *Client) SendCommand(command API_TYPE, body Body) error {
 func (c *Client) SendHello() error {
 	if c.redistDefault > 0 {
 		body := &HelloBody{
-			Redist: c.redistDefault,
+			RedistDefault: c.redistDefault,
 		}
 		return c.SendCommand(HELLO, body)
 	}
@@ -301,6 +304,24 @@ func (c *Client) SendRouterIDAdd() error {
 
 func (c *Client) SendInterfaceAdd() error {
 	return c.SendCommand(INTERFACE_ADD, nil)
+}
+
+func (c *Client) SendRedistribute() error {
+	for i := ROUTE_SYSTEM; i < ROUTE_MAX; i++ {
+		if c.redistDefault != i {
+			body := &RedistributeBody{
+				Redist: i,
+			}
+			if e := c.SendCommand(REDISTRIBUTE_ADD, body); e != nil {
+				return e
+			}
+		}
+	}
+
+	if e := c.SendCommand(REDISTRIBUTE_DEFAULT_ADD, nil); e != nil {
+		return e
+	}
+	return nil
 }
 
 func (c *Client) Close() error {
@@ -341,15 +362,28 @@ type Body interface {
 }
 
 type HelloBody struct {
-	Redist ROUTE_TYPE
+	RedistDefault ROUTE_TYPE
 }
 
 func (b *HelloBody) DecodeFromBytes(data []byte) error {
-	b.Redist = ROUTE_TYPE(data[0])
+	b.RedistDefault = ROUTE_TYPE(data[0])
 	return nil
 }
 
 func (b *HelloBody) Serialize() ([]byte, error) {
+	return []byte{uint8(b.RedistDefault)}, nil
+}
+
+type RedistributeBody struct {
+	Redist ROUTE_TYPE
+}
+
+func (b *RedistributeBody) DecodeFromBytes(data []byte) error {
+	b.Redist = ROUTE_TYPE(data[0])
+	return nil
+}
+
+func (b *RedistributeBody) Serialize() ([]byte, error) {
 	return []byte{uint8(b.Redist)}, nil
 }
 
@@ -537,6 +571,127 @@ func (b *IPRouteBody) Serialize() ([]byte, error) {
 	return buf, nil
 }
 
+type IPv4RouteRedistributeBody struct {
+	Type         ROUTE_TYPE
+	Flags        FLAG
+	Message      uint8
+	Prefix       net.IP
+	PrefixLength uint8
+	Nexthops     []net.IP
+	Ifindexs     []uint32
+	Distance     uint8
+	Metric       uint32
+	MessageFlag  uint8
+}
+
+func (b *IPv4RouteRedistributeBody) DecodeFromBytes(data []byte) error {
+
+	b.Type = ROUTE_TYPE(data[0])
+	b.Flags = FLAG(data[1])
+	b.Message = data[2]
+	b.PrefixLength = data[3]
+
+	if b.PrefixLength > 32 {
+		return fmt.Errorf("prefix length is greater than 32")
+	}
+
+	byteLen := int((b.PrefixLength + 7) / 8)
+
+	curPos := 4
+	buf := make([]byte, 4)
+	copy(buf, data[curPos:curPos + byteLen])
+	b.Prefix = net.IP(buf).To4()
+
+	curPos += byteLen
+	// rest =  distance(1) + metric(4)
+	rest := 5
+	if len(data[curPos:]) == rest {
+		log.Warnf("nexthop is not included")
+		return nil
+	}
+
+	numNexthop := int(data[curPos])
+	curPos += 1
+	// rest = (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop + distance(1) + metric(4)
+	rest = numNexthop * 9 + 5
+	if len(data[curPos:]) != rest {
+		return fmt.Errorf("message length invalid")
+	}
+
+	b.Nexthops = []net.IP{}
+	b.Ifindexs = []uint32{}
+
+	for i := 0; i < numNexthop; i++ {
+		nexthop := net.IP(data[curPos : curPos+4]).To4()
+		b.Nexthops = append(b.Nexthops, nexthop)
+		// skip nexthop and 1byte place holder
+		curPos += 5
+		ifidx := binary.BigEndian.Uint32(data[curPos : curPos+4])
+		b.Ifindexs = append(b.Ifindexs, ifidx)
+		curPos += 4
+	}
+
+	// metric
+	b.Distance = data[curPos]
+	curPos += 1
+	b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
+
+	return nil
+}
+
+func (b *IPv4RouteRedistributeBody) Serialize() ([]byte, error) {
+	buf := make([]byte, 5)
+	buf[0] = uint8(b.Type)
+	buf[1] = uint8(b.Flags)
+	buf[2] = b.Message
+	bitlen := b.PrefixLength
+	bytelen := (int(b.PrefixLength) + 7) / 8
+	bbuf := make([]byte, bytelen)
+	copy(bbuf, b.Prefix)
+	if bitlen%8 != 0 {
+		mask := 0xff00 >> (bitlen % 8)
+		last_byte_value := bbuf[bytelen-1] & byte(mask)
+		bbuf[bytelen-1] = last_byte_value
+	}
+	buf = append(buf, bitlen)
+	buf = append(buf, bbuf...)
+
+	if b.Message&MESSAGE_NEXTHOP > 0 {
+		if b.Flags&FLAG_BLACKHOLE > 0 {
+			buf = append(buf, []byte{1, uint8(NEXTHOP_BLACKHOLE)}...)
+		} else {
+			buf = append(buf, uint8(len(b.Nexthops)+len(b.Ifindexs)))
+		}
+
+		for _, v := range b.Nexthops {
+			if v.To4() != nil {
+				buf = append(buf, uint8(NEXTHOP_IPV4))
+				buf = append(buf, v.To4()...)
+			} else {
+				buf = append(buf, uint8(NEXTHOP_IPV6))
+				buf = append(buf, v.To16()...)
+			}
+		}
+
+		for _, v := range b.Ifindexs {
+			buf = append(buf, uint8(NEXTHOP_IFINDEX))
+			bbuf := make([]byte, 4)
+			binary.BigEndian.PutUint32(bbuf, v)
+			buf = append(buf, bbuf...)
+		}
+	}
+
+	if b.Message&MESSAGE_DISTANCE > 0 {
+		buf = append(buf, b.Distance)
+	}
+	if b.Message&MESSAGE_METRIC > 0 {
+		bbuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(bbuf, b.Metric)
+		buf = append(buf, bbuf...)
+	}
+	return buf, nil
+}
+
 type Message struct {
 	Header Header
 	Body   Body
@@ -569,6 +724,11 @@ func ParseMessage(hdr *Header, data []byte) (*Message, error) {
 		m.Body = &InterfaceAddressUpdateBody{}
 	case ROUTER_ID_UPDATE:
 		m.Body = &RouterIDUpdateBody{}
+	case IPV4_ROUTE_ADD:
+		m.Body = &IPv4RouteRedistributeBody{}
+		log.Infof("ipv4 route add message received: %v", data)
+	case IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
+		log.Infof("route delete message received: %v", data)
 	default:
 		return nil, fmt.Errorf("Unknown zapi command: %d", m.Header.Command)
 	}
