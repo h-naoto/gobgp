@@ -240,9 +240,7 @@ func (server *BgpServer) Serve() {
 		case rmsg := <-server.roaClient.recieveROA():
 			server.roaClient.handleRTRMsg(rmsg)
 		case zmsg := <-zapiMsgCh:
-			log.Infof("handleZapiMsg")
 			m := handleZapiMsg(zmsg, server)
-			log.Infof("m: %v", m)
 			if len(m) > 0 {
 				senderMsgs = append(senderMsgs, m...)
 			}

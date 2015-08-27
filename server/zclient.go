@@ -108,7 +108,7 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 		"Prefix":   body.Prefix,
 		"PrefixLength":  body.PrefixLength,
 		"Nexthop":   body.Nexthops,
-		"api": header.Command,
+		"api": header.Command.String(),
 	}).Infof("create path from redistribute message.")
 
 	if isV4 {
