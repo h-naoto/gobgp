@@ -581,7 +581,6 @@ type IPv4RouteRedistributeBody struct {
 	Ifindexs     []uint32
 	Distance     uint8
 	Metric       uint32
-	MessageFlag  uint8
 }
 
 func (b *IPv4RouteRedistributeBody) DecodeFromBytes(data []byte) error {

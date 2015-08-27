@@ -103,7 +103,17 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 	case zebra.IPV4_ROUTE_ADD:
 		nlri = bgp.NewNLRInfo(body.PrefixLength, body.Prefix.String())
 		nexthop := bgp.NewPathAttributeNextHop("0.0.0.0")
-		log.Infof("nexthop %v ", nexthop)
+
+		log.WithFields(log.Fields{
+			"Topic": "Zebra",
+			"RouteType": body.Type,
+			"Flag": body.Flags,
+			"Message": body.Message,
+			"Prefix":   body.Prefix,
+			"PrefixLength":  body.PrefixLength,
+			"Nexthop":   body.Nexthops,
+		}).Infof("IPV4_ROUTE_ADD")
+
 		pattr = append(pattr, nexthop)
 
 	case zebra.IPV6_ROUTE_ADD:
