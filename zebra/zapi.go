@@ -572,7 +572,7 @@ func (b *IPRouteBody) Serialize() ([]byte, error) {
 }
 
 
-type RouteRedistributeBody struct {
+type IPRouteRedistributeBody struct {
 	Type         ROUTE_TYPE
 	Flags        FLAG
 	Message      uint8
@@ -586,7 +586,7 @@ type RouteRedistributeBody struct {
 	api API_TYPE
 }
 
-func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
+func (b *IPRouteRedistributeBody) DecodeFromBytes(data []byte) error {
 
 	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
 	var addrLen uint8 = 4
@@ -616,21 +616,25 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	}
 
 	curPos += byteLen
-	// rest =  distance(1) + metric(4)
-	rest := 5
-	if len(data[curPos:]) == rest {
-		log.Warnf("nexthop is not included")
-		// metric
-		b.Distance = data[curPos]
-		curPos += 1
-		b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
-		return nil
+
+	rest := 0
+	var numNexthop int
+	if b.Message&MESSAGE_NEXTHOP > 0 {
+		numNexthop = int(data[curPos])
+		// rest = numNexthop(1) + (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop
+		rest += 1 + numNexthop * 9
 	}
 
-	numNexthop := int(data[curPos])
-	curPos += 1
-	// rest = (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop + distance(1) + metric(4)
-	rest = numNexthop * 9 + 5
+	if b.Message&MESSAGE_DISTANCE > 0 {
+		// distance(1)
+		rest += 1
+	}
+
+	if b.Message&MESSAGE_METRIC > 0 {
+		// metric(4)
+		rest += 4
+	}
+
 	if len(data[curPos:]) != rest {
 		return fmt.Errorf("message length invalid")
 	}
@@ -638,35 +642,40 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	b.Nexthops = []net.IP{}
 	b.Ifindexs = []uint32{}
 
-	for i := 0; i < numNexthop; i++ {
+	curPos += 1
+	if b.Message&MESSAGE_NEXTHOP > 0 {
 
-		addr := data[curPos : curPos + int(addrLen)]
-		var nexthop net.IP
-		if isV4 {
-			nexthop = net.IP(addr).To4()
-		}else {
-			nexthop = net.IP(addr).To16()
+		for i := 0; i < numNexthop; i++ {
+			addr := data[curPos : curPos + int(addrLen)]
+			var nexthop net.IP
+			if isV4 {
+				nexthop = net.IP(addr).To4()
+			}else {
+				nexthop = net.IP(addr).To16()
+			}
+			b.Nexthops = append(b.Nexthops, nexthop)
+
+			// skip nexthop and 1byte place holder
+			curPos += 5
+			ifidx := binary.BigEndian.Uint32(data[curPos : curPos+4])
+			b.Ifindexs = append(b.Ifindexs, ifidx)
+			curPos += 4
 		}
-		b.Nexthops = append(b.Nexthops, nexthop)
-
-		// skip nexthop and 1byte place holder
-		curPos += 5
-		ifidx := binary.BigEndian.Uint32(data[curPos : curPos+4])
-		b.Ifindexs = append(b.Ifindexs, ifidx)
-		curPos += 4
 	}
 
-	// metric
-	b.Distance = data[curPos]
-	curPos += 1
-	b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
+	if b.Message&MESSAGE_DISTANCE > 0 {
+		b.Distance = data[curPos]
+	}
+	if b.Message&MESSAGE_METRIC > 0 {
+		curPos += 1
+		b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
+	}
 
 	return nil
-
 }
 
 
-func (b *RouteRedistributeBody) Serialize() ([]byte, error) {
+func (b *IPRouteRedistributeBody) Serialize() ([]byte, error) {
 
 	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
 
@@ -748,7 +757,7 @@ func ParseMessage(hdr *Header, data []byte) (*Message, error) {
 	case ROUTER_ID_UPDATE:
 		m.Body = &RouterIDUpdateBody{}
 	case IPV4_ROUTE_ADD, IPV6_ROUTE_ADD, IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
-		m.Body = &RouteRedistributeBody{api: m.Header.Command}
+		m.Body = &IPRouteRedistributeBody{api: m.Header.Command}
 		log.Infof("ipv4/v6 route add/delete message received: %v", data)
 		log.Infof("api: %s",  m.Header.Command.String())
 	default:

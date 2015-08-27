@@ -89,7 +89,7 @@ func newIPRouteMessage(path *table.Path) *zebra.Message {
 func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInfo) *table.Path {
 
 	header := m.Header
-	body := m.Body.(*zebra.RouteRedistributeBody)
+	body := m.Body.(*zebra.IPRouteRedistributeBody)
 	isV4 := header.Command == zebra.IPV4_ROUTE_ADD || header.Command == zebra.IPV4_ROUTE_DELETE
 
 	var nlri bgp.AddrPrefixInterface
@@ -146,7 +146,7 @@ func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapi
 func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 
 	switch b := msg.Body.(type){
-	case *zebra.RouteRedistributeBody:
+	case *zebra.IPRouteRedistributeBody:
 		pi := &table.PeerInfo{
 			AS:      server.bgpConfig.Global.GlobalConfig.As,
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
