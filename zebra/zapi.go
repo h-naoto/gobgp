@@ -571,7 +571,8 @@ func (b *IPRouteBody) Serialize() ([]byte, error) {
 	return buf, nil
 }
 
-type IPv4RouteRedistributeBody struct {
+
+type RouteRedistributeBody struct {
 	Type         ROUTE_TYPE
 	Flags        FLAG
 	Message      uint8
@@ -581,32 +582,49 @@ type IPv4RouteRedistributeBody struct {
 	Ifindexs     []uint32
 	Distance     uint8
 	Metric       uint32
+
+	api API_TYPE
 }
 
-func (b *IPv4RouteRedistributeBody) DecodeFromBytes(data []byte) error {
+func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
+
+	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
+	var addrLen int = 4
+	if !isV4 {
+		addrLen = 16
+	}
 
 	b.Type = ROUTE_TYPE(data[0])
 	b.Flags = FLAG(data[1])
 	b.Message = data[2]
 	b.PrefixLength = data[3]
 
-	if b.PrefixLength > 32 {
-		return fmt.Errorf("prefix length is greater than 32")
+	if b.PrefixLength > addrLen * 8 {
+		return nil, fmt.Errorf("prefix length is greater than %d",addrLen * 8)
 	}
 
 	byteLen := int((b.PrefixLength + 7) / 8)
 
 	curPos := 4
-	buf := make([]byte, 4)
+	buf := make([]byte, addrLen)
 	copy(buf, data[curPos:curPos + byteLen])
-	b.Prefix = net.IP(buf).To4()
+
+	if isV4 {
+		b.Prefix = net.IP(buf).To4()
+	}else{
+		b.Prefix = net.IP(buf).To16()
+	}
 
 	curPos += byteLen
 	// rest =  distance(1) + metric(4)
 	rest := 5
 	if len(data[curPos:]) == rest {
 		log.Warnf("nexthop is not included")
-		return nil
+		// metric
+		b.Distance = data[curPos]
+		curPos += 1
+		b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
+		return b, nil
 	}
 
 	numNexthop := int(data[curPos])
@@ -614,15 +632,23 @@ func (b *IPv4RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	// rest = (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop + distance(1) + metric(4)
 	rest = numNexthop * 9 + 5
 	if len(data[curPos:]) != rest {
-		return fmt.Errorf("message length invalid")
+		return nil, fmt.Errorf("message length invalid")
 	}
 
 	b.Nexthops = []net.IP{}
 	b.Ifindexs = []uint32{}
 
 	for i := 0; i < numNexthop; i++ {
-		nexthop := net.IP(data[curPos : curPos+4]).To4()
+
+		addr := data[curPos : curPos+addrLen]
+		var nexthop net.IP
+		if isV4 {
+			nexthop = net.IP(addr).To4()
+		}else {
+			nexthop = net.IP(addr).To16()
+		}
 		b.Nexthops = append(b.Nexthops, nexthop)
+
 		// skip nexthop and 1byte place holder
 		curPos += 5
 		ifidx := binary.BigEndian.Uint32(data[curPos : curPos+4])
@@ -635,10 +661,15 @@ func (b *IPv4RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	curPos += 1
 	b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
 
-	return nil
+	return b
+
 }
 
-func (b *IPv4RouteRedistributeBody) Serialize() ([]byte, error) {
+
+func (b *RouteRedistributeBody) Serialize() ([]byte, error) {
+
+	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
+
 	buf := make([]byte, 5)
 	buf[0] = uint8(b.Type)
 	buf[1] = uint8(b.Flags)
@@ -656,26 +687,19 @@ func (b *IPv4RouteRedistributeBody) Serialize() ([]byte, error) {
 	buf = append(buf, bbuf...)
 
 	if b.Message&MESSAGE_NEXTHOP > 0 {
-		if b.Flags&FLAG_BLACKHOLE > 0 {
-			buf = append(buf, []byte{1, uint8(NEXTHOP_BLACKHOLE)}...)
-		} else {
-			buf = append(buf, uint8(len(b.Nexthops)+len(b.Ifindexs)))
-		}
+		buf = append(buf, uint8(len(b.Nexthops)))
 
-		for _, v := range b.Nexthops {
-			if v.To4() != nil {
-				buf = append(buf, uint8(NEXTHOP_IPV4))
-				buf = append(buf, v.To4()...)
-			} else {
-				buf = append(buf, uint8(NEXTHOP_IPV6))
-				buf = append(buf, v.To16()...)
+		for i := 0 ; i < len(b.Nexthops); i++ {
+
+			if isV4 {
+				buf = append(buf, b.Nexthops[i].To4()...)
+			}else {
+				buf = append(buf, b.Nexthops[i].To16()...)
 			}
-		}
+			buf = append(buf, uint8(1))
 
-		for _, v := range b.Ifindexs {
-			buf = append(buf, uint8(NEXTHOP_IFINDEX))
 			bbuf := make([]byte, 4)
-			binary.BigEndian.PutUint32(bbuf, v)
+			binary.BigEndian.PutUint32(bbuf, b.Ifindexs[i])
 			buf = append(buf, bbuf...)
 		}
 	}
@@ -723,11 +747,10 @@ func ParseMessage(hdr *Header, data []byte) (*Message, error) {
 		m.Body = &InterfaceAddressUpdateBody{}
 	case ROUTER_ID_UPDATE:
 		m.Body = &RouterIDUpdateBody{}
-	case IPV4_ROUTE_ADD:
-		m.Body = &IPv4RouteRedistributeBody{}
-		log.Infof("ipv4 route add message received: %v", data)
-	case IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
-		log.Infof("route delete message received: %v", data)
+	case IPV4_ROUTE_ADD, IPV6_ROUTE_ADD, IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
+		m.Body = &RouteRedistributeBody{api: m.Header.Command}
+		log.Infof("ipv4/v6 route add/delete message received: %v", data)
+		log.Infof("api: %s",  m.Header.Command.String())
 	default:
 		return nil, fmt.Errorf("Unknown zapi command: %d", m.Header.Command)
 	}

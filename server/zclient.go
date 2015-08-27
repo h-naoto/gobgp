@@ -89,34 +89,33 @@ func newIPRouteMessage(path *table.Path) *zebra.Message {
 func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInfo) *table.Path {
 
 	header := m.Header
-	body := m.Body.(*zebra.IPv4RouteRedistributeBody)
+	body := m.Body.(*zebra.RouteRedistributeBody)
+	isV4 := header.Command == zebra.IPV4_ROUTE_ADD || header.Command == zebra.IPV4_ROUTE_DELETE
 
 	var nlri bgp.AddrPrefixInterface
 	pattr := make([]bgp.PathAttributeInterface, 0)
 	var mpnlri *bgp.PathAttributeMpReachNLRI
-	var isWithdraw bool = false
+	var isWithdraw bool = header.Command == zebra.IPV4_ROUTE_DELETE || header.Command == zebra.IPV6_ROUTE_DELETE
 
 	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
 	pattr = append(pattr, origin)
 
-	switch header.Command {
-	case zebra.IPV4_ROUTE_ADD:
+	log.WithFields(log.Fields{
+		"Topic": "Zebra",
+		"RouteType": body.Type,
+		"Flag": body.Flags,
+		"Message": body.Message,
+		"Prefix":   body.Prefix,
+		"PrefixLength":  body.PrefixLength,
+		"Nexthop":   body.Nexthops,
+		"api": header.Command,
+	}).Infof()
+
+	if isV4 {
 		nlri = bgp.NewNLRInfo(body.PrefixLength, body.Prefix.String())
 		nexthop := bgp.NewPathAttributeNextHop("0.0.0.0")
-
-		log.WithFields(log.Fields{
-			"Topic": "Zebra",
-			"RouteType": body.Type,
-			"Flag": body.Flags,
-			"Message": body.Message,
-			"Prefix":   body.Prefix,
-			"PrefixLength":  body.PrefixLength,
-			"Nexthop":   body.Nexthops,
-		}).Infof("IPV4_ROUTE_ADD")
-
 		pattr = append(pattr, nexthop)
-
-	case zebra.IPV6_ROUTE_ADD:
+	} else {
 		p := bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
 		mpnlri = bgp.NewPathAttributeMpReachNLRI("::", []bgp.AddrPrefixInterface{p})
 		pattr = append(pattr, mpnlri)
@@ -125,7 +124,6 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 	med := bgp.NewPathAttributeMultiExitDisc(body.Metric)
 	pattr = append(pattr, med)
 
-	// TODO: investigate noimplicit withdraw
 	p := table.NewPath(peerInfo, nlri, isWithdraw, pattr, false, time.Now(), true)
 	p.IsFromZebra = true
 	return p
@@ -146,10 +144,9 @@ func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapi
 }
 
 func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
-	log.Infof("receive message from zebra %v", msg)
 
 	switch b := msg.Body.(type){
-	case *zebra.IPv4RouteRedistributeBody:
+	case *zebra.RouteRedistributeBody:
 		pi := &table.PeerInfo{
 			AS:      server.bgpConfig.Global.GlobalConfig.As,
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
