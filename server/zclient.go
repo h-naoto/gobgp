@@ -109,7 +109,7 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 		"PrefixLength":  body.PrefixLength,
 		"Nexthop":   body.Nexthops,
 		"api": header.Command,
-	}).Infof()
+	}).Infof("create path from redistribute message.")
 
 	if isV4 {
 		nlri = bgp.NewNLRInfo(body.PrefixLength, body.Prefix.String())

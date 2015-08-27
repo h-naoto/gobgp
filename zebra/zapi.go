@@ -589,7 +589,7 @@ type RouteRedistributeBody struct {
 func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 
 	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
-	var addrLen int = 4
+	var addrLen uint8 = 4
 	if !isV4 {
 		addrLen = 16
 	}
@@ -600,7 +600,7 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	b.PrefixLength = data[3]
 
 	if b.PrefixLength > addrLen * 8 {
-		return nil, fmt.Errorf("prefix length is greater than %d",addrLen * 8)
+		return fmt.Errorf("prefix length is greater than %d",addrLen * 8)
 	}
 
 	byteLen := int((b.PrefixLength + 7) / 8)
@@ -624,7 +624,7 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 		b.Distance = data[curPos]
 		curPos += 1
 		b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
-		return b, nil
+		return nil
 	}
 
 	numNexthop := int(data[curPos])
@@ -632,7 +632,7 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	// rest = (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop + distance(1) + metric(4)
 	rest = numNexthop * 9 + 5
 	if len(data[curPos:]) != rest {
-		return nil, fmt.Errorf("message length invalid")
+		return fmt.Errorf("message length invalid")
 	}
 
 	b.Nexthops = []net.IP{}
@@ -640,7 +640,7 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 
 	for i := 0; i < numNexthop; i++ {
 
-		addr := data[curPos : curPos+addrLen]
+		addr := data[curPos : curPos + int(addrLen)]
 		var nexthop net.IP
 		if isV4 {
 			nexthop = net.IP(addr).To4()
@@ -661,7 +661,7 @@ func (b *RouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	curPos += 1
 	b.Metric = binary.BigEndian.Uint32(data[curPos : curPos+4])
 
-	return b
+	return nil
 
 }
 
