@@ -102,8 +102,8 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 
 	log.WithFields(log.Fields{
 		"Topic": "Zebra",
-		"RouteType": body.Type,
-		"Flag": body.Flags,
+		"RouteType": body.Type.String(),
+		"Flag": body.Flags.String(),
 		"Message": body.Message,
 		"Prefix":   body.Prefix,
 		"PrefixLength":  body.PrefixLength,
@@ -152,12 +152,9 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
 		}
 
-		log.Infof("receive message from zebra prefix %v", b.Prefix )
-		log.Infof("receive message from zebra nexthops %v", b.Nexthops)
 		if b.Prefix != nil && b.Type != zebra.ROUTE_KERNEL{
 			p := createPathFromRedistributeMessage(msg, pi)
 			msgs := server.propagateUpdate("", false, []*table.Path{p})
-			log.Infof("receive message from zebra msgs length %d", len(msgs))
 			return msgs
 		}
 	}
