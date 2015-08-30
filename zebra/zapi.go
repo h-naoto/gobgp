@@ -621,8 +621,8 @@ func (b *IPRouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	var numNexthop int
 	if b.Message&MESSAGE_NEXTHOP > 0 {
 		numNexthop = int(data[curPos])
-		// rest = numNexthop(1) + (nexthop(4) + placeholder(1) + ifindex(4)) * numNexthop
-		rest += 1 + numNexthop * 9
+		// rest = numNexthop(1) + (nexthop(4 or 16) + placeholder(1) + ifindex(4)) * numNexthop
+		rest += 1 + numNexthop * (addrLen + 5)
 	}
 
 	if b.Message&MESSAGE_DISTANCE > 0 {
