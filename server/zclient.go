@@ -116,8 +116,8 @@ func createPathFromRedistributeMessage(m *zebra.Message, peerInfo *table.PeerInf
 		nexthop := bgp.NewPathAttributeNextHop("0.0.0.0")
 		pattr = append(pattr, nexthop)
 	} else {
-		p := bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
-		mpnlri = bgp.NewPathAttributeMpReachNLRI("::", []bgp.AddrPrefixInterface{p})
+		nlri := bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
+		mpnlri = bgp.NewPathAttributeMpReachNLRI("::", []bgp.AddrPrefixInterface{nlri})
 		pattr = append(pattr, mpnlri)
 	}
 
