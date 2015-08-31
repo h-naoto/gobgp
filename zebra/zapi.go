@@ -575,7 +575,7 @@ func (b *IPRouteBody) Serialize() ([]byte, error) {
 
 
 func (b *IPRouteBody) DecodeFromBytes(data []byte) error {
-	fmt.Errorf("HANA-DEBUG from zebra -> %v", data)
+	log.Errorf("HANA-DEBUG from zebra -> %v", data)
 	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
 	var addrLen uint8 = 4
 	if !isV4 {
