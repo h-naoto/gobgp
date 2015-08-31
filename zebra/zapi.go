@@ -505,17 +505,19 @@ type IPRouteBody struct {
 	Ifindexs     []uint32
 	Distance     uint8
 	Metric       uint32
-}
+	api API_TYPE
 
-func (b *IPRouteBody) DecodeFromBytes(data []byte) error {
-	b.Type = ROUTE_TYPE(data[0])
-	b.Flags = FLAG(data[1])
-	b.Message = data[2]
-	b.SAFI = SAFI(data[3])
-	b.Prefix = data[3:7]
-	b.PrefixLength = data[7]
-	return nil
 }
+//
+//func (b *IPRouteBody) DecodeFromBytes(data []byte) error {
+//	b.Type = ROUTE_TYPE(data[0])
+//	b.Flags = FLAG(data[1])
+//	b.Message = data[2]
+//	b.SAFI = SAFI(data[3])
+//	b.Prefix = data[3:7]
+//	b.PrefixLength = data[7]
+//	return nil
+//}
 
 func (b *IPRouteBody) Serialize() ([]byte, error) {
 	buf := make([]byte, 5)
@@ -572,21 +574,7 @@ func (b *IPRouteBody) Serialize() ([]byte, error) {
 }
 
 
-type IPRouteRedistributeBody struct {
-	Type         ROUTE_TYPE
-	Flags        FLAG
-	Message      uint8
-	Prefix       net.IP
-	PrefixLength uint8
-	Nexthops     []net.IP
-	Ifindexs     []uint32
-	Distance     uint8
-	Metric       uint32
-
-	api API_TYPE
-}
-
-func (b *IPRouteRedistributeBody) DecodeFromBytes(data []byte) error {
+func (b *IPRouteBody) DecodeFromBytes(data []byte) error {
 
 	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
 	var addrLen uint8 = 4
@@ -674,55 +662,55 @@ func (b *IPRouteRedistributeBody) DecodeFromBytes(data []byte) error {
 	return nil
 }
 
-
-func (b *IPRouteRedistributeBody) Serialize() ([]byte, error) {
-
-	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
-
-	buf := make([]byte, 5)
-	buf[0] = uint8(b.Type)
-	buf[1] = uint8(b.Flags)
-	buf[2] = b.Message
-	bitlen := b.PrefixLength
-	bytelen := (int(b.PrefixLength) + 7) / 8
-	bbuf := make([]byte, bytelen)
-	copy(bbuf, b.Prefix)
-	if bitlen%8 != 0 {
-		mask := 0xff00 >> (bitlen % 8)
-		last_byte_value := bbuf[bytelen-1] & byte(mask)
-		bbuf[bytelen-1] = last_byte_value
-	}
-	buf = append(buf, bitlen)
-	buf = append(buf, bbuf...)
-
-	if b.Message&MESSAGE_NEXTHOP > 0 {
-		buf = append(buf, uint8(len(b.Nexthops)))
-
-		for i := 0 ; i < len(b.Nexthops); i++ {
-
-			if isV4 {
-				buf = append(buf, b.Nexthops[i].To4()...)
-			}else {
-				buf = append(buf, b.Nexthops[i].To16()...)
-			}
-			buf = append(buf, uint8(1))
-
-			bbuf := make([]byte, 4)
-			binary.BigEndian.PutUint32(bbuf, b.Ifindexs[i])
-			buf = append(buf, bbuf...)
-		}
-	}
-
-	if b.Message&MESSAGE_DISTANCE > 0 {
-		buf = append(buf, b.Distance)
-	}
-	if b.Message&MESSAGE_METRIC > 0 {
-		bbuf := make([]byte, 4)
-		binary.BigEndian.PutUint32(bbuf, b.Metric)
-		buf = append(buf, bbuf...)
-	}
-	return buf, nil
-}
+//
+//func (b *IPRouteRedistributeBody) Serialize() ([]byte, error) {
+//
+//	isV4 := b.api == IPV4_ROUTE_ADD || b.api == IPV4_ROUTE_DELETE
+//
+//	buf := make([]byte, 5)
+//	buf[0] = uint8(b.Type)
+//	buf[1] = uint8(b.Flags)
+//	buf[2] = b.Message
+//	bitlen := b.PrefixLength
+//	bytelen := (int(b.PrefixLength) + 7) / 8
+//	bbuf := make([]byte, bytelen)
+//	copy(bbuf, b.Prefix)
+//	if bitlen%8 != 0 {
+//		mask := 0xff00 >> (bitlen % 8)
+//		last_byte_value := bbuf[bytelen-1] & byte(mask)
+//		bbuf[bytelen-1] = last_byte_value
+//	}
+//	buf = append(buf, bitlen)
+//	buf = append(buf, bbuf...)
+//
+//	if b.Message&MESSAGE_NEXTHOP > 0 {
+//		buf = append(buf, uint8(len(b.Nexthops)))
+//
+//		for i := 0 ; i < len(b.Nexthops); i++ {
+//
+//			if isV4 {
+//				buf = append(buf, b.Nexthops[i].To4()...)
+//			}else {
+//				buf = append(buf, b.Nexthops[i].To16()...)
+//			}
+//			buf = append(buf, uint8(1))
+//
+//			bbuf := make([]byte, 4)
+//			binary.BigEndian.PutUint32(bbuf, b.Ifindexs[i])
+//			buf = append(buf, bbuf...)
+//		}
+//	}
+//
+//	if b.Message&MESSAGE_DISTANCE > 0 {
+//		buf = append(buf, b.Distance)
+//	}
+//	if b.Message&MESSAGE_METRIC > 0 {
+//		bbuf := make([]byte, 4)
+//		binary.BigEndian.PutUint32(bbuf, b.Metric)
+//		buf = append(buf, bbuf...)
+//	}
+//	return buf, nil
+//}
 
 type Message struct {
 	Header Header
@@ -757,7 +745,7 @@ func ParseMessage(hdr *Header, data []byte) (*Message, error) {
 	case ROUTER_ID_UPDATE:
 		m.Body = &RouterIDUpdateBody{}
 	case IPV4_ROUTE_ADD, IPV6_ROUTE_ADD, IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
-		m.Body = &IPRouteRedistributeBody{api: m.Header.Command}
+		m.Body = &IPRouteBody{api: m.Header.Command}
 		log.Infof("ipv4/v6 route add/delete message received: %v", data)
 		log.Infof("api: %s",  m.Header.Command.String())
 	default:
