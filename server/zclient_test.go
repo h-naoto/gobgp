@@ -27,10 +27,10 @@ func Test_createPathFromIPRouteMessage(t *testing.T) {
 	assert := assert.New(t)
 
 	m := &zebra.Message{}
-	h := &zebra.Header{
-		Len:     zebra.HEADER_SIZE,
+	h := &zebra.Ver2Header{
+		Len:     zebra.VER2_HEADER_SIZE,
 		Marker:  zebra.HEADER_MARKER,
-		Version: zebra.VERSION,
+		Version: zebra.VERSION2,
 		Command: zebra.IPV4_ROUTE_ADD,
 	}
 
@@ -48,7 +48,7 @@ func Test_createPathFromIPRouteMessage(t *testing.T) {
 		Api:          zebra.API_TYPE(zebra.IPV4_ROUTE_ADD),
 	}
 
-	m.Header = *h
+	m.Header = h
 	m.Body = b
 
 	pi := &table.PeerInfo{
@@ -64,7 +64,7 @@ func Test_createPathFromIPRouteMessage(t *testing.T) {
 
 	// withdraw
 	h.Command = zebra.IPV4_ROUTE_DELETE
-	m.Header = *h
+	m.Header = h
 	p = createPathFromIPRouteMessage(m, pi)
 	assert.NotEqual(nil, p)
 	assert.Equal("0.0.0.0", p.GetNexthop().String())
@@ -79,7 +79,7 @@ func Test_createPathFromIPRouteMessage(t *testing.T) {
 	b.Prefix = net.ParseIP("2001:db8:0:f101::")
 	b.PrefixLength = uint8(64)
 	b.Nexthops = []net.IP{net.ParseIP("::")}
-	m.Header = *h
+	m.Header = h
 	m.Body = b
 
 	p = createPathFromIPRouteMessage(m, pi)
@@ -93,7 +93,7 @@ func Test_createPathFromIPRouteMessage(t *testing.T) {
 
 	// withdraw
 	h.Command = zebra.IPV6_ROUTE_DELETE
-	m.Header = *h
+	m.Header = h
 	p = createPathFromIPRouteMessage(m, pi)
 	assert.NotEqual(nil, p)
 	assert.Equal("::", p.GetNexthop().String())

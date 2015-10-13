@@ -22,36 +22,69 @@ import (
 	"testing"
 )
 
-func Test_Header(t *testing.T) {
+func Test_Vertion2_Header(t *testing.T) {
 	assert := assert.New(t)
 
 	//DecodeFromBytes
-	buf := make([]byte, 6)
+	buf := make([]byte, VER2_HEADER_SIZE)
 	binary.BigEndian.PutUint16(buf[0:], 10)
 	buf[2] = HEADER_MARKER
-	buf[3] = VERSION
+	buf[3] = VERSION2
 	binary.BigEndian.PutUint16(buf[4:], uint16(IPV4_ROUTE_ADD))
-	h := &Header{}
+	var h Header = &Ver2Header{}
 	err := h.DecodeFromBytes(buf)
 	assert.Equal(nil, err)
 
 	//Serialize
 	buf, err = h.Serialize()
 	assert.Equal(nil, err)
-	h2 := &Header{}
+	var h2 Header = &Ver2Header{}
 	err = h2.DecodeFromBytes(buf)
 	assert.Equal(nil, err)
 	assert.Equal(h, h2)
 
 	// header_size mismatch
-	buf = make([]byte, HEADER_SIZE-1)
+	buf = make([]byte, VER2_HEADER_SIZE-1)
 	binary.BigEndian.PutUint16(buf[0:], 10)
 	buf[2] = 0xff
 	buf[3] = 0x02
-	h3 := &Header{}
+	var h3 Header = &Ver2Header{}
 	err = h3.DecodeFromBytes(buf)
 	assert.NotEqual(nil, err)
 }
+
+func Test_Vertion3_Header(t *testing.T) {
+	assert := assert.New(t)
+
+	//DecodeFromBytes
+	buf := make([]byte, VER3_HEADER_SIZE)
+	binary.BigEndian.PutUint16(buf[0:], 10)
+	buf[2] = HEADER_MARKER
+	buf[3] = VERSION3
+	binary.BigEndian.PutUint16(buf[4:], uint16(VRF_DEFAULT))
+	binary.BigEndian.PutUint16(buf[6:], uint16(IPV4_ROUTE_ADD))
+	var h Header = &Ver3Header{}
+	err := h.DecodeFromBytes(buf)
+	assert.Equal(nil, err)
+
+	//Serialize
+	buf, err = h.Serialize()
+	assert.Equal(nil, err)
+	var h2 Header = &Ver3Header{}
+	err = h2.DecodeFromBytes(buf)
+	assert.Equal(nil, err)
+	assert.Equal(h, h2)
+
+	// header_size mismatch
+	buf = make([]byte, VER3_HEADER_SIZE-1)
+	binary.BigEndian.PutUint16(buf[0:], 10)
+	buf[2] = 0xff
+	buf[3] = 0x02
+	var h3 Header = &Ver3Header{}
+	err = h3.DecodeFromBytes(buf)
+	assert.NotEqual(nil, err)
+}
+
 
 func Test_InterfaceUpdateBody(t *testing.T) {
 	assert := assert.New(t)

@@ -2349,7 +2349,6 @@ func (server *BgpServer) NewZclient(url string, redistRouteTypes []string) error
 	if err != nil {
 		return err
 	}
-	cli.SendHello()
 	cli.SendRouterIDAdd()
 	cli.SendInterfaceAdd()
 	for _, typ := range redistRouteTypes {

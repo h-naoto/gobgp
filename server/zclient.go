@@ -35,7 +35,7 @@ func (m *broadcastZapiMsg) send() {
 	m.client.Send(m.msg)
 }
 
-func newIPRouteMessage(path *table.Path) *zebra.Message {
+func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 	l := strings.SplitN(path.GetNlri().String(), "/", 2)
 	var command zebra.API_TYPE
 	var prefix net.IP
@@ -68,12 +68,7 @@ func newIPRouteMessage(path *table.Path) *zebra.Message {
 		flags |= zebra.MESSAGE_METRIC
 	}
 	return &zebra.Message{
-		Header: zebra.Header{
-			Len:     zebra.HEADER_SIZE,
-			Marker:  zebra.HEADER_MARKER,
-			Version: zebra.VERSION,
-			Command: command,
-		},
+		Header: cli.CreateHeader(command, zebra.VRF_DEFAULT),
 		Body: &zebra.IPRouteBody{
 			Type:         zebra.ROUTE_BGP,
 			SAFI:         zebra.SAFI_UNICAST,
@@ -90,12 +85,12 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 
 	header := m.Header
 	body := m.Body.(*zebra.IPRouteBody)
-	isV4 := header.Command == zebra.IPV4_ROUTE_ADD || header.Command == zebra.IPV4_ROUTE_DELETE
+	isV4 := header.GetCommand() == zebra.IPV4_ROUTE_ADD || header.GetCommand() == zebra.IPV4_ROUTE_DELETE
 
 	var nlri bgp.AddrPrefixInterface
 	pattr := make([]bgp.PathAttributeInterface, 0)
 	var mpnlri *bgp.PathAttributeMpReachNLRI
-	var isWithdraw bool = header.Command == zebra.IPV4_ROUTE_DELETE || header.Command == zebra.IPV6_ROUTE_DELETE
+	var isWithdraw bool = header.GetCommand() == zebra.IPV4_ROUTE_DELETE || header.GetCommand() == zebra.IPV6_ROUTE_DELETE
 
 	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
 	pattr = append(pattr, origin)
@@ -111,7 +106,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 		"IfIndex":      body.Ifindexs,
 		"Metric":       body.Metric,
 		"Distance":     body.Distance,
-		"api":          header.Command.String(),
+		"api":          header.GetCommand().String(),
 	}).Debugf("create path from ip route message.")
 
 	if isV4 {
@@ -136,7 +131,7 @@ func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapi
 	if cli == nil {
 		return nil
 	}
-	m := newIPRouteMessage(path)
+	m := newIPRouteMessage(cli, path)
 	if m == nil {
 		return nil
 	}

@@ -23,12 +23,15 @@ import (
 	"net"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const (
-	HEADER_SIZE      = 6
+	VER2_HEADER_SIZE = 6
+	VER3_HEADER_SIZE = 8
 	HEADER_MARKER    = 255
-	VERSION          = 2
+	VERSION2         = 2
+	VERSION3         = 3
 	INTERFACE_NAMSIZ = 20
 )
 
@@ -207,18 +210,64 @@ const (
 	NEXTHOP_BLACKHOLE
 )
 
+type VRF_TYPE uint16
+
+const (
+	VRF_DEFAULT VRF_TYPE = 0
+)
+
 type Client struct {
 	outgoing      chan *Message
 	incoming      chan *Message
 	redistDefault ROUTE_TYPE
 	conn          net.Conn
+	version       uint8
 }
 
 func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
-	conn, err := net.Dial(network, address)
-	if err != nil {
-		return nil, err
+
+	tryConn := func(version uint8) (net.Conn, error) {
+		log.Infof("try connection to zebra version %d", version)
+		conn, err := net.Dial(network, address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to zebra version %d: %v", version, err)
+		}
+		c := &Client{
+			redistDefault: typ,
+			conn:          conn,
+			version:       version,
+		}
+		if err := c.sendHello(conn); err != nil {
+			return nil, fmt.Errorf("failed to connect to zebra version %d: %v", version, err)
+		}
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		buf := make([]byte, 1)
+		if _, err := conn.Read(buf); err != nil {
+			if 0 > strings.Index(err.Error(),"i/o timeout"){
+				conn.Close()
+				return nil, fmt.Errorf("failed to connect to zebra version %d: %v", version, err)
+			}
+		}
+		conn.SetReadDeadline(time.Time{})
+		log.Infof("successful connect to zebra version %d", version)
+
+		return conn, nil
 	}
+
+	hdrSize := map[uint8]int{VERSION3: VER3_HEADER_SIZE,  VERSION2: VER2_HEADER_SIZE}
+	hd := map[uint8]Header{VERSION3: &Ver3Header{}, VERSION2: &Ver3Header{}}
+
+	version := uint8(VERSION3)
+	conn, err := tryConn(version)
+	if err != nil {
+		log.Warn(err)
+		version = uint8(VERSION2)
+		if conn, err = tryConn(version); err != nil {
+			return nil, err
+		}
+
+	}
+
 	outgoing := make(chan *Message)
 	incoming := make(chan *Message, 64)
 
@@ -227,6 +276,7 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 		incoming:      incoming,
 		redistDefault: typ,
 		conn:          conn,
+		version:       version,
 	}
 
 	go func() {
@@ -238,7 +288,6 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 					log.Warnf("failed to serialize: %s", m)
 					continue
 				}
-
 				_, err = conn.Write(b)
 				if err != nil {
 					log.Errorf("failed to write: %s", err)
@@ -253,26 +302,25 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 
 	go func() {
 		for {
-			headerBuf, err := readAll(conn, HEADER_SIZE)
+			headerBuf, err := readAll(conn, hdrSize[version])
 			if err != nil {
 				log.Error("failed to read header: ", err)
 				return
 			}
 			log.Debugf("read header from zebra: %v", headerBuf)
-			hd := &Header{}
-			err = hd.DecodeFromBytes(headerBuf)
+			err = hd[version].DecodeFromBytes(headerBuf)
 			if err != nil {
 				log.Error("failed to decode header: ", err)
 				return
 			}
 
-			bodyBuf, err := readAll(conn, int(hd.Len-HEADER_SIZE))
+			bodyBuf, err := readAll(conn, int(hd[version].GetLen()-uint16(hdrSize[version])))
 			if err != nil {
 				log.Error("failed to read body: ", err)
 				return
 			}
 			log.Debugf("read body from zebra: %v", bodyBuf)
-			m, err := ParseMessage(hd, bodyBuf)
+			m, err := ParseMessage(hd[version], bodyBuf)
 			if err != nil {
 				log.Warn("failed to parse message: ", err)
 				continue
@@ -289,6 +337,10 @@ func readAll(conn net.Conn, length int) ([]byte, error) {
 	buf := make([]byte, length)
 	_, err := io.ReadFull(conn, buf)
 	return buf, err
+}
+
+func (c *Client) GetVersion() uint8 {
+	return c.version
 }
 
 func (c *Client) Receive() chan *Message {
@@ -310,26 +362,63 @@ func (c *Client) SendCommand(command API_TYPE, body Body) error {
 		"Topic":   "Zebra",
 		"Command": command.String(),
 		"Body":    body,
+		"Version": c.version,
 	}).Debug("send command to zebra")
 	m := &Message{
-		Header: Header{
-			Len:     HEADER_SIZE,
-			Marker:  HEADER_MARKER,
-			Version: VERSION,
-			Command: command,
-		},
-		Body: body,
+		Header: c.CreateHeader(command, VRF_DEFAULT),
+		Body:   body,
 	}
 	c.Send(m)
 	return nil
 }
 
-func (c *Client) SendHello() error {
+func (c *Client) CreateHeader(command API_TYPE, vrfId VRF_TYPE) Header {
+	var h Header
+	switch c.version {
+	case VERSION2:
+		h = &Ver2Header{
+			Len:     VER2_HEADER_SIZE,
+			Marker:  HEADER_MARKER,
+			Version: VERSION2,
+			Command: command,
+		}
+	case VERSION3:
+		h = &Ver3Header{
+			Len:     VER3_HEADER_SIZE,
+			Marker:  HEADER_MARKER,
+			Version: VERSION3,
+			VrfId:   vrfId,
+			Command: command,
+		}
+	}
+	return h
+}
+
+func (c *Client) sendHello(conn net.Conn) error {
 	if c.redistDefault > 0 {
 		body := &HelloBody{
 			RedistDefault: c.redistDefault,
 		}
-		return c.SendCommand(HELLO, body)
+		log.WithFields(log.Fields{
+			"Topic":   "Zebra",
+			"Command": HELLO.String(),
+			"Body":    body,
+			"Version": c.version,
+		}).Debug("send command to zebra")
+		m := &Message{
+			Header: c.CreateHeader(HELLO, VRF_DEFAULT),
+			Body:   body,
+		}
+		b, err := m.Serialize()
+		if err != nil {
+			return fmt.Errorf("failed to serialize: %s", m)
+		}
+
+		_, err = conn.Write(b)
+		if err != nil {
+			return fmt.Errorf("failed to write: %s", err)
+		}
+
 	}
 	return nil
 }
@@ -375,15 +464,23 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-type Header struct {
+type Header interface {
+	DecodeFromBytes([]byte) error
+	Serialize() ([]byte, error)
+	GetCommand() API_TYPE
+	GetLen() uint16
+	SetLen(uint16)
+}
+
+type Ver2Header struct {
 	Len     uint16
 	Marker  uint8
 	Version uint8
 	Command API_TYPE
 }
 
-func (h *Header) Serialize() ([]byte, error) {
-	buf := make([]byte, HEADER_SIZE)
+func (h *Ver2Header) Serialize() ([]byte, error) {
+	buf := make([]byte, VER2_HEADER_SIZE)
 	binary.BigEndian.PutUint16(buf[0:], h.Len)
 	buf[2] = h.Marker
 	buf[3] = h.Version
@@ -391,8 +488,8 @@ func (h *Header) Serialize() ([]byte, error) {
 	return buf, nil
 }
 
-func (h *Header) DecodeFromBytes(data []byte) error {
-	if uint16(len(data)) < HEADER_SIZE {
+func (h *Ver2Header) DecodeFromBytes(data []byte) error {
+	if uint16(len(data)) < VER2_HEADER_SIZE {
 		return fmt.Errorf("Not all ZAPI message header")
 	}
 	h.Len = binary.BigEndian.Uint16(data[0:2])
@@ -400,6 +497,62 @@ func (h *Header) DecodeFromBytes(data []byte) error {
 	h.Version = data[3]
 	h.Command = API_TYPE(binary.BigEndian.Uint16(data[4:6]))
 	return nil
+}
+
+func (h *Ver2Header) GetCommand() API_TYPE {
+	return h.Command
+}
+
+func (h *Ver2Header) GetLen() uint16 {
+	return h.Len
+}
+
+func (h *Ver2Header) SetLen(len uint16) {
+	h.Len = len
+}
+
+type Ver3Header struct {
+	Len     uint16
+	Marker  uint8
+	Version uint8
+	VrfId   VRF_TYPE
+	Command API_TYPE
+}
+
+func (h *Ver3Header) Serialize() ([]byte, error) {
+	buf := make([]byte, VER3_HEADER_SIZE)
+	binary.BigEndian.PutUint16(buf[0:], h.Len)
+	buf[2] = h.Marker
+	buf[3] = h.Version
+	//	binary.BigEndian.PutUint16(buf[4:], uint16(h.Command))
+	binary.BigEndian.PutUint16(buf[4:], uint16(h.VrfId))
+	binary.BigEndian.PutUint16(buf[6:], uint16(h.Command))
+	return buf, nil
+}
+
+func (h *Ver3Header) DecodeFromBytes(data []byte) error {
+	if uint16(len(data)) < VER3_HEADER_SIZE {
+		return fmt.Errorf("Not all ZAPI message header")
+	}
+	h.Len = binary.BigEndian.Uint16(data[0:2])
+	h.Marker = data[2]
+	h.Version = data[3]
+	//	h.Command = API_TYPE(binary.BigEndian.Uint16(data[4:6]))
+	h.VrfId = VRF_TYPE(binary.BigEndian.Uint16(data[4:6]))
+	h.Command = API_TYPE(binary.BigEndian.Uint16(data[6:8]))
+	return nil
+}
+
+func (h *Ver3Header) GetCommand() API_TYPE {
+	return h.Command
+}
+
+func (h *Ver3Header) GetLen() uint16 {
+	return h.Len
+}
+
+func (h *Ver3Header) SetLen(len uint16) {
+	h.Len = len
 }
 
 type Body interface {
@@ -907,7 +1060,7 @@ func (m *Message) Serialize() ([]byte, error) {
 			return nil, err
 		}
 	}
-	m.Header.Len = uint16(len(body)) + HEADER_SIZE
+	m.Header.SetLen(uint16(len(body)) + m.Header.GetLen())
 	hdr, err := m.Header.Serialize()
 	if err != nil {
 		return nil, err
@@ -915,10 +1068,10 @@ func (m *Message) Serialize() ([]byte, error) {
 	return append(hdr, body...), nil
 }
 
-func ParseMessage(hdr *Header, data []byte) (*Message, error) {
-	m := &Message{Header: *hdr}
+func ParseMessage(hdr Header, data []byte) (*Message, error) {
+	m := &Message{Header: hdr}
 
-	switch m.Header.Command {
+	switch m.Header.GetCommand() {
 	case INTERFACE_ADD, INTERFACE_DELETE, INTERFACE_UP, INTERFACE_DOWN:
 		m.Body = &InterfaceUpdateBody{}
 	case INTERFACE_ADDRESS_ADD, INTERFACE_ADDRESS_DELETE:
@@ -926,16 +1079,16 @@ func ParseMessage(hdr *Header, data []byte) (*Message, error) {
 	case ROUTER_ID_UPDATE:
 		m.Body = &RouterIDUpdateBody{}
 	case IPV4_ROUTE_ADD, IPV6_ROUTE_ADD, IPV4_ROUTE_DELETE, IPV6_ROUTE_DELETE:
-		m.Body = &IPRouteBody{Api: m.Header.Command}
+		m.Body = &IPRouteBody{Api: m.Header.GetCommand()}
 		log.Debugf("ipv4/v6 route add/delete message received: %v", data)
 	case IPV4_NEXTHOP_LOOKUP, IPV6_NEXTHOP_LOOKUP:
-		m.Body = &NexthopLookupBody{Api: m.Header.Command}
+		m.Body = &NexthopLookupBody{Api: m.Header.GetCommand()}
 		log.Debugf("ipv4/v6 nexthop lookup received: %v", data)
 	case IPV4_IMPORT_LOOKUP:
-		m.Body = &ImportLookupBody{Api: m.Header.Command}
+		m.Body = &ImportLookupBody{Api: m.Header.GetCommand()}
 		log.Debugf("ipv4 import lookup message received: %v", data)
 	default:
-		return nil, fmt.Errorf("Unknown zapi command: %d", m.Header.Command)
+		return nil, fmt.Errorf("Unknown zapi command: %d", m.Header.GetCommand)
 	}
 	err := m.Body.DecodeFromBytes(data)
 	if err != nil {
