@@ -243,7 +243,7 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		buf := make([]byte, 1)
 		if _, err := conn.Read(buf); err != nil {
-			if 0 > strings.Index(err.Error(),"i/o timeout"){
+			if 0 > strings.Index(err.Error(), "i/o timeout") {
 				conn.Close()
 				return nil, fmt.Errorf("failed to connect to zebra version %d: %v", version, err)
 			}
@@ -254,7 +254,7 @@ func NewClient(network, address string, typ ROUTE_TYPE) (*Client, error) {
 		return conn, nil
 	}
 
-	hdrSize := map[uint8]int{VERSION3: VER3_HEADER_SIZE,  VERSION2: VER2_HEADER_SIZE}
+	hdrSize := map[uint8]int{VERSION3: VER3_HEADER_SIZE, VERSION2: VER2_HEADER_SIZE}
 	hd := map[uint8]Header{VERSION3: &Ver3Header{}, VERSION2: &Ver3Header{}}
 
 	version := uint8(VERSION3)
@@ -470,6 +470,7 @@ type Header interface {
 	GetCommand() API_TYPE
 	GetLen() uint16
 	SetLen(uint16)
+	GetVrf() VRF_TYPE
 }
 
 type Ver2Header struct {
@@ -509,6 +510,10 @@ func (h *Ver2Header) GetLen() uint16 {
 
 func (h *Ver2Header) SetLen(len uint16) {
 	h.Len = len
+}
+
+func (h *Ver2Header) GetVrf() VRF_TYPE {
+	return VRF_DEFAULT
 }
 
 type Ver3Header struct {
@@ -553,6 +558,10 @@ func (h *Ver3Header) GetLen() uint16 {
 
 func (h *Ver3Header) SetLen(len uint16) {
 	h.Len = len
+}
+
+func (h *Ver3Header) GetVrf() VRF_TYPE {
+	return h.VrfId
 }
 
 type Body interface {

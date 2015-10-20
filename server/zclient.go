@@ -36,12 +36,14 @@ func (m *broadcastZapiMsg) send() {
 }
 
 func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
-	l := strings.SplitN(path.GetNlri().String(), "/", 2)
+	nlri := path.GetNlri()
+	l := strings.SplitN(nlri.String(), "/", 2)
 	var command zebra.API_TYPE
 	var prefix net.IP
 	nexthops := []net.IP{}
-	switch path.GetRouteFamily() {
-	case bgp.RF_IPv4_UC:
+	vrf_id := zebra.VRF_DEFAULT
+	switch true {
+	case path.GetRouteFamily() == bgp.RF_IPv4_UC:
 		if path.IsWithdraw == true {
 			command = zebra.IPV4_ROUTE_DELETE
 		} else {
@@ -49,7 +51,7 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 		}
 		prefix = net.ParseIP(l[0]).To4()
 		nexthops = append(nexthops, path.GetNexthop().To4())
-	case bgp.RF_IPv6_UC:
+	case path.GetRouteFamily() == bgp.RF_IPv6_UC:
 		if path.IsWithdraw == true {
 			command = zebra.IPV6_ROUTE_DELETE
 		} else {
@@ -57,6 +59,38 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 		}
 		prefix = net.ParseIP(l[0]).To16()
 		nexthops = append(nexthops, path.GetNexthop().To16())
+	case path.GetRouteFamily() == bgp.RF_IPv4_VPN && cli.GetVersion() == 3:
+		if path.IsWithdraw == true {
+			command = zebra.IPV4_ROUTE_DELETE
+		} else {
+			command = zebra.IPV4_ROUTE_ADD
+		}
+		prefix = nlri.(*bgp.LabeledVPNIPAddrPrefix).Prefix
+		nexthops = append(nexthops, path.GetNexthop().To4())
+		rd := nlri.(*bgp.LabeledVPNIPAddrPrefix).RD
+		assigned := strings.SplitN(rd.String(), ":", 2)[1]
+		id, e := strconv.ParseUint(assigned, 10, 16)
+		if e != nil {
+			log.Warnf("faild to uint16: %s", assigned)
+			return nil
+		}
+		vrf_id = zebra.VRF_TYPE(id)
+	case path.GetRouteFamily() == bgp.RF_IPv6_VPN && cli.GetVersion() == 3:
+		if path.IsWithdraw == true {
+			command = zebra.IPV6_ROUTE_DELETE
+		} else {
+			command = zebra.IPV6_ROUTE_ADD
+		}
+		prefix = nlri.(*bgp.LabeledVPNIPv6AddrPrefix).Prefix
+		nexthops = append(nexthops, path.GetNexthop().To16())
+		rd := nlri.(*bgp.LabeledVPNIPv6AddrPrefix).RD
+		assigned := strings.SplitN(rd.String(), ":", 2)[1]
+		id, e := strconv.ParseUint(assigned, 10, 16)
+		if e != nil {
+			log.Warnf("faild to uint16: %s", assigned)
+			return nil
+		}
+		vrf_id = zebra.VRF_TYPE(id)
 	default:
 		return nil
 	}
@@ -67,8 +101,20 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 	if err == nil {
 		flags |= zebra.MESSAGE_METRIC
 	}
+
+	log.WithFields(log.Fields{
+		"Topic":        "Zebra",
+		"Type":         zebra.ROUTE_BGP,
+		"SAFI":         zebra.SAFI_UNICAST,
+		"Message":      flags,
+		"Prefix":       prefix,
+		"PrefixLength": uint8(plen),
+		"Nexthop":      nexthops,
+		"Metric":       med,
+	}).Debugf("create route message from path.")
+
 	return &zebra.Message{
-		Header: cli.CreateHeader(command, zebra.VRF_DEFAULT),
+		Header: cli.CreateHeader(command, vrf_id),
 		Body: &zebra.IPRouteBody{
 			Type:         zebra.ROUTE_BGP,
 			SAFI:         zebra.SAFI_UNICAST,
