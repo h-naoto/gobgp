@@ -583,7 +583,7 @@ func (server *BgpServer) dropPeerAllRoutes(peer *Peer) []*SenderMsg {
 func (server *BgpServer) broadcastBests(bests []*table.Path) {
 	for _, path := range bests {
 		if !path.IsFromZebra {
-			z := newBroadcastZapiBestMsg(server.zclient, path)
+			z := newBroadcastZapiBestMsg(server.zclient, path, server.globalRib.Vrfs)
 			if z != nil {
 				server.broadcastMsgs = append(server.broadcastMsgs, z)
 				log.WithFields(log.Fields{

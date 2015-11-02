@@ -113,7 +113,7 @@ type TableManager struct {
 	minLabel            uint32
 	maxLabel            uint32
 	nextLabel           uint32
-	nextVrfId           uint16
+	nextVrfId           VRF_ID_YTPE
 	rfList              []bgp.RouteFamily
 	importPolicies      []*Policy
 	defaultImportPolicy RouteType
@@ -129,7 +129,7 @@ func NewTableManager(owner string, rfList []bgp.RouteFamily, minLabel, maxLabel 
 		minLabel:  minLabel,
 		maxLabel:  maxLabel,
 		nextLabel: minLabel,
-		nextVrfId: 0,
+		nextVrfId: MIN_VRF_ID,
 		rfList:    rfList,
 	}
 	for _, rf := range rfList {
@@ -247,10 +247,9 @@ func (manager *TableManager) OwnerName() string {
 	return manager.owner
 }
 
-func (manager *TableManager) getNextVrfId() (uint16, error) {
-	maxVrfId := ^uint16(0)
-	if manager.nextVrfId > maxVrfId {
-		return 0, fmt.Errorf("ran out of vrf id resource. max vrf id %d", maxVrfId)
+func (manager *TableManager) getNextVrfId() (VRF_ID_YTPE, error) {
+	if manager.nextVrfId > MAX_VRF_ID {
+		return 0, fmt.Errorf("ran out of vrf id resource. max vrf id %d", MAX_VRF_ID)
 	}
 	vrfId := manager.nextVrfId
 	manager.nextVrfId += 1

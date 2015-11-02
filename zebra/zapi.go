@@ -360,7 +360,7 @@ func (c *Client) SendCommand(command API_TYPE, body Body) error {
 		"Version": c.version,
 	}).Debug("send command to zebra")
 	m := &Message{
-		Header: c.CreateHeader(command, table.VRF_ID_YTPE),
+		Header: c.CreateHeader(command, table.VRF_ID_DEFAULT),
 		Body:   body,
 	}
 	c.Send(m)
@@ -465,6 +465,7 @@ type Header interface {
 	GetCommand() API_TYPE
 	GetLen() uint16
 	SetLen(uint16)
+	GetVrf() table.VRF_ID_YTPE
 }
 
 type Ver2Header struct {
@@ -506,11 +507,15 @@ func (h *Ver2Header) SetLen(len uint16) {
 	h.Len = len
 }
 
+func (h *Ver2Header) GetVrf() table.VRF_ID_YTPE {
+	return table.VRF_ID_DEFAULT
+}
+
 type Ver3Header struct {
 	Len     uint16
 	Marker  uint8
 	Version uint8
-	VrfId   VRF_TYPE
+	VrfId   table.VRF_ID_YTPE
 	Command API_TYPE
 }
 
@@ -533,7 +538,7 @@ func (h *Ver3Header) DecodeFromBytes(data []byte) error {
 	h.Marker = data[2]
 	h.Version = data[3]
 	//	h.Command = API_TYPE(binary.BigEndian.Uint16(data[4:6]))
-	h.VrfId = VRF_TYPE(binary.BigEndian.Uint16(data[4:6]))
+	h.VrfId = table.VRF_ID_YTPE(binary.BigEndian.Uint16(data[4:6]))
 	h.Command = API_TYPE(binary.BigEndian.Uint16(data[6:8]))
 	return nil
 }
@@ -548,6 +553,10 @@ func (h *Ver3Header) GetLen() uint16 {
 
 func (h *Ver3Header) SetLen(len uint16) {
 	h.Len = len
+}
+
+func (h *Ver3Header) GetVrf() table.VRF_ID_YTPE {
+	return h.VrfId
 }
 
 type Body interface {

@@ -24,8 +24,8 @@ type VRF_ID_YTPE uint16
 
 const (
 	VRF_ID_DEFAULT VRF_ID_YTPE = 0
-	MIN_VRF_ID VRF_ID_YTPE = 1
-	MAX_VRF_ID VRF_ID_YTPE = ^uint16(0)
+	MIN_VRF_ID VRF_ID_YTPE = 1000
+	MAX_VRF_ID VRF_ID_YTPE = 65535
 )
 
 type Vrf struct {

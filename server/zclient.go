@@ -35,13 +35,25 @@ func (m *broadcastZapiMsg) send() {
 	m.client.Send(m.msg)
 }
 
-func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
-	l := strings.SplitN(path.GetNlri().String(), "/", 2)
+func newIPRouteMessage(cli *zebra.Client, path *table.Path, vrfs map[string]*table.Vrf) *zebra.Message {
+	f := func() table.VRF_ID_YTPE {
+		for _, vrf := range vrfs {
+			ok := table.CanImportToVrf(vrf, path)
+			if ok {
+				return vrf.VrfId
+			}
+		}
+		return table.VRF_ID_DEFAULT
+	}
+
+	nlri := path.GetNlri()
+	l := strings.SplitN(nlri.String(), "/", 2)
 	var command zebra.API_TYPE
 	var prefix net.IP
 	nexthops := []net.IP{}
-	switch path.GetRouteFamily() {
-	case bgp.RF_IPv4_UC:
+	vrfId := table.VRF_ID_DEFAULT
+	switch true {
+	case path.GetRouteFamily() == bgp.RF_IPv4_UC:
 		if path.IsWithdraw == true {
 			command = zebra.IPV4_ROUTE_DELETE
 		} else {
@@ -49,7 +61,7 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 		}
 		prefix = net.ParseIP(l[0]).To4()
 		nexthops = append(nexthops, path.GetNexthop().To4())
-	case bgp.RF_IPv6_UC:
+	case path.GetRouteFamily() == bgp.RF_IPv6_UC:
 		if path.IsWithdraw == true {
 			command = zebra.IPV6_ROUTE_DELETE
 		} else {
@@ -57,6 +69,24 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 		}
 		prefix = net.ParseIP(l[0]).To16()
 		nexthops = append(nexthops, path.GetNexthop().To16())
+	case path.GetRouteFamily() == bgp.RF_IPv4_VPN && cli.GetVersion() == 3:
+		if path.IsWithdraw == true {
+			command = zebra.IPV4_ROUTE_DELETE
+		} else {
+			command = zebra.IPV4_ROUTE_ADD
+		}
+		prefix = nlri.(*bgp.LabeledVPNIPAddrPrefix).Prefix
+		nexthops = append(nexthops, path.GetNexthop().To4())
+		vrfId = f()
+	case path.GetRouteFamily() == bgp.RF_IPv6_VPN && cli.GetVersion() == 3:
+		if path.IsWithdraw == true {
+			command = zebra.IPV6_ROUTE_DELETE
+		} else {
+			command = zebra.IPV6_ROUTE_ADD
+		}
+		prefix = nlri.(*bgp.LabeledVPNIPv6AddrPrefix).Prefix
+		nexthops = append(nexthops, path.GetNexthop().To16())
+		vrfId = f()
 	default:
 		return nil
 	}
@@ -67,8 +97,21 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 	if err == nil {
 		flags |= zebra.MESSAGE_METRIC
 	}
+
+	log.WithFields(log.Fields{
+		"Topic":        "Zebra",
+		"Type":         zebra.ROUTE_BGP,
+		"SAFI":         zebra.SAFI_UNICAST,
+		"VrfId":		vrfId,
+		"Message":      flags,
+		"Prefix":       prefix,
+		"PrefixLength": uint8(plen),
+		"Nexthop":      nexthops,
+		"Metric":       med,
+	}).Debugf("create ip route message from path.")
+
 	return &zebra.Message{
-		Header: cli.CreateHeader(command, table.VRF_ID_DEFAULT),
+		Header: cli.CreateHeader(command, vrfId),
 		Body: &zebra.IPRouteBody{
 			Type:         zebra.ROUTE_BGP,
 			SAFI:         zebra.SAFI_UNICAST,
@@ -81,11 +124,10 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 	}
 }
 
-func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *table.Path {
+func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vrfs map[string]*table.Vrf) *table.Path {
 
 	header := m.Header
 	body := m.Body.(*zebra.IPRouteBody)
-	isV4 := header.GetCommand() == zebra.IPV4_ROUTE_ADD || header.GetCommand() == zebra.IPV4_ROUTE_DELETE
 
 	var nlri bgp.AddrPrefixInterface
 	pattr := make([]bgp.PathAttributeInterface, 0)
@@ -98,6 +140,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 	log.WithFields(log.Fields{
 		"Topic":        "Zebra",
 		"RouteType":    body.Type.String(),
+		"VrfId":		header.GetVrf(),
 		"Flag":         body.Flags.String(),
 		"Message":      body.Message,
 		"Prefix":       body.Prefix,
@@ -109,11 +152,53 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 		"api":          header.GetCommand().String(),
 	}).Debugf("create path from ip route message.")
 
-	if isV4 {
+	isV4 := header.GetCommand() == zebra.IPV4_ROUTE_ADD || header.GetCommand() == zebra.IPV4_ROUTE_DELETE
+	haveVrfId := header.GetVrf() != table.VRF_ID_DEFAULT
+
+	switch true {
+	case isV4 && haveVrfId:
+		matched := false
+		var vrf *table.Vrf
+		for _, v := range vrfs {
+			if v.VrfId == header.GetVrf() {
+				matched = true
+				vrf = v
+				break
+			}
+		}
+		if matched {
+			nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
+			n := nlri.(*bgp.IPAddrPrefix)
+			nlri = bgp.NewLabeledVPNIPAddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
+		} else {
+			nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
+			nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
+			pattr = append(pattr, nexthop)
+		}
+	case isV4:
 		nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
 		nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
 		pattr = append(pattr, nexthop)
-	} else {
+	case !isV4 && haveVrfId:
+		matched := false
+		var vrf *table.Vrf
+		for _, v := range vrfs {
+			if v.VrfId == header.GetVrf() {
+				matched = true
+				vrf = v
+				break
+			}
+		}
+		if matched {
+			nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
+			n := nlri.(*bgp.IPv6AddrPrefix)
+			nlri = bgp.NewLabeledVPNIPv6AddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
+		} else {
+			nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
+			mpnlri = bgp.NewPathAttributeMpReachNLRI(body.Nexthops[0].String(), []bgp.AddrPrefixInterface{nlri})
+			pattr = append(pattr, mpnlri)
+		}
+	case !isV4:
 		nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
 		mpnlri = bgp.NewPathAttributeMpReachNLRI(body.Nexthops[0].String(), []bgp.AddrPrefixInterface{nlri})
 		pattr = append(pattr, mpnlri)
@@ -127,11 +212,11 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 	return p
 }
 
-func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path) *broadcastZapiMsg {
+func newBroadcastZapiBestMsg(cli *zebra.Client, path *table.Path, vrfs map[string]*table.Vrf) *broadcastZapiMsg {
 	if cli == nil {
 		return nil
 	}
-	m := newIPRouteMessage(cli, path)
+	m := newIPRouteMessage(cli, path, vrfs)
 	if m == nil {
 		return nil
 	}
@@ -150,8 +235,9 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
 		}
 
-		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
-			p := createPathFromIPRouteMessage(msg, pi)
+//		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
+		if b.Prefix != nil && len(b.Nexthops) > 0 {
+			p := createPathFromIPRouteMessage(msg, pi, server.globalRib.Vrfs)
 			msgs := server.propagateUpdate(nil, []*table.Path{p})
 			return msgs
 		}
