@@ -113,6 +113,7 @@ type TableManager struct {
 	minLabel            uint32
 	maxLabel            uint32
 	nextLabel           uint32
+	nextVrfId           uint16
 	rfList              []bgp.RouteFamily
 	importPolicies      []*Policy
 	defaultImportPolicy RouteType
@@ -128,6 +129,7 @@ func NewTableManager(owner string, rfList []bgp.RouteFamily, minLabel, maxLabel 
 		minLabel:  minLabel,
 		maxLabel:  maxLabel,
 		nextLabel: minLabel,
+		nextVrfId: 0,
 		rfList:    rfList,
 	}
 	for _, rf := range rfList {
@@ -245,19 +247,35 @@ func (manager *TableManager) OwnerName() string {
 	return manager.owner
 }
 
+func (manager *TableManager) getNextVrfId() (uint16, error) {
+	maxVrfId := ^uint16(0)
+	if manager.nextVrfId > maxVrfId {
+		return 0, fmt.Errorf("ran out of vrf id resource. max vrf id %d", maxVrfId)
+	}
+	vrfId := manager.nextVrfId
+	manager.nextVrfId += 1
+	return vrfId, nil
+}
+
 func (manager *TableManager) AddVrf(name string, rd bgp.RouteDistinguisherInterface, importRt, exportRt []bgp.ExtendedCommunityInterface, info *PeerInfo) ([]*Path, error) {
 	if _, ok := manager.Vrfs[name]; ok {
 		return nil, fmt.Errorf("vrf %s already exists", name)
 	}
+	vrfId, err := manager.getNextVrfId()
+	if err != nil {
+		return nil, err
+	}
 	log.WithFields(log.Fields{
 		"Topic":    "Vrf",
 		"Key":      name,
+		"VrfId":    vrfId,
 		"Rd":       rd,
 		"ImportRt": importRt,
 		"ExportRt": exportRt,
 	}).Debugf("add vrf")
 	manager.Vrfs[name] = &Vrf{
 		Name:     name,
+		VrfId:    vrfId,
 		Rd:       rd,
 		ImportRt: importRt,
 		ExportRt: exportRt,

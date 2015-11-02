@@ -16,6 +16,7 @@
 package zebra
 
 import (
+	"github.com/osrg/gobgp/table"
 	"encoding/binary"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -210,12 +211,6 @@ const (
 	NEXTHOP_BLACKHOLE
 )
 
-type VRF_TYPE uint16
-
-const (
-	VRF_DEFAULT VRF_TYPE = 0
-)
-
 type Client struct {
 	outgoing      chan *Message
 	incoming      chan *Message
@@ -365,14 +360,14 @@ func (c *Client) SendCommand(command API_TYPE, body Body) error {
 		"Version": c.version,
 	}).Debug("send command to zebra")
 	m := &Message{
-		Header: c.CreateHeader(command, VRF_DEFAULT),
+		Header: c.CreateHeader(command, table.VRF_ID_YTPE),
 		Body:   body,
 	}
 	c.Send(m)
 	return nil
 }
 
-func (c *Client) CreateHeader(command API_TYPE, vrfId VRF_TYPE) Header {
+func (c *Client) CreateHeader(command API_TYPE, vrfId table.VRF_ID_YTPE) Header {
 	var h Header
 	switch c.version {
 	case VERSION2:
@@ -406,7 +401,7 @@ func (c *Client) sendHello(conn net.Conn) error {
 			"Version": c.version,
 		}).Debug("send command to zebra")
 		m := &Message{
-			Header: c.CreateHeader(HELLO, VRF_DEFAULT),
+			Header: c.CreateHeader(HELLO, table.VRF_ID_DEFAULT),
 			Body:   body,
 		}
 		b, err := m.Serialize()

@@ -20,8 +20,17 @@ import (
 	"github.com/osrg/gobgp/packet"
 )
 
+type VRF_ID_YTPE uint16
+
+const (
+	VRF_ID_DEFAULT VRF_ID_YTPE = 0
+	MIN_VRF_ID VRF_ID_YTPE = 1
+	MAX_VRF_ID VRF_ID_YTPE = ^uint16(0)
+)
+
 type Vrf struct {
 	Name     string
+	VrfId    VRF_ID_YTPE
 	Rd       bgp.RouteDistinguisherInterface
 	ImportRt []bgp.ExtendedCommunityInterface
 	ExportRt []bgp.ExtendedCommunityInterface

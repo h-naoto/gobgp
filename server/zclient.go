@@ -68,7 +68,7 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path) *zebra.Message {
 		flags |= zebra.MESSAGE_METRIC
 	}
 	return &zebra.Message{
-		Header: cli.CreateHeader(command, zebra.VRF_DEFAULT),
+		Header: cli.CreateHeader(command, table.VRF_ID_DEFAULT),
 		Body: &zebra.IPRouteBody{
 			Type:         zebra.ROUTE_BGP,
 			SAFI:         zebra.SAFI_UNICAST,
