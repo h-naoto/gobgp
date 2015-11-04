@@ -16,13 +16,14 @@
 package server
 
 import (
+	log "github.com/Sirupsen/logrus"
+	"github.com/osrg/gobgp/packet"
+	"github.com/osrg/gobgp/table"
+	"github.com/osrg/gobgp/zebra"
 	"net"
 	"strconv"
 	"strings"
 	"time"
-	log "github.com/Sirupsen/logrus"
-	"github.com/osrg/gobgp/table"
-	"github.com/osrg/gobgp/zebra"
 )
 
 type broadcastZapiMsg struct {
