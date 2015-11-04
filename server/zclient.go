@@ -16,14 +16,13 @@
 package server
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/osrg/gobgp/packet"
-	"github.com/osrg/gobgp/table"
-	"github.com/osrg/gobgp/zebra"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+	log "github.com/Sirupsen/logrus"
+	"github.com/osrg/gobgp/table"
+	"github.com/osrg/gobgp/zebra"
 )
 
 type broadcastZapiMsg struct {
@@ -41,6 +40,7 @@ func newBaseMassage(cli *zebra.Client, c zebra.API_TYPE, b zebra.Body, v table.V
 		"Command": c.String(),
 		"Body":    b,
 		"Version": cli.GetVersion(),
+		"VrfId":   v,
 	}).Debug("send command to zebra")
 	return &zebra.Message{
 		Header: cli.CreateHeader(c, v),
