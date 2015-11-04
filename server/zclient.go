@@ -232,8 +232,10 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 		}
 		if matched {
 			nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
+			nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
 			n := nlri.(*bgp.IPAddrPrefix)
 			nlri = bgp.NewLabeledVPNIPAddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
+			pattr = append(pattr, nexthop)
 		} else {
 			nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
 			nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
@@ -255,8 +257,10 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 		}
 		if matched {
 			nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
+			nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
 			n := nlri.(*bgp.IPv6AddrPrefix)
 			nlri = bgp.NewLabeledVPNIPv6AddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
+			pattr = append(pattr, nexthop)
 		} else {
 			nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
 			mpnlri = bgp.NewPathAttributeMpReachNLRI(body.Nexthops[0].String(), []bgp.AddrPrefixInterface{nlri})
