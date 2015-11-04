@@ -35,6 +35,69 @@ func (m *broadcastZapiMsg) send() {
 	m.client.Send(m.msg)
 }
 
+func newBaseMassage(cli *zebra.Client, c zebra.API_TYPE, b zebra.Body, v table.VRF_ID_YTPE) *zebra.Message {
+	log.WithFields(log.Fields{
+		"Topic":   "Zebra",
+		"Command": c.String(),
+		"Body":    b,
+		"Version": cli.GetVersion(),
+	}).Debug("send command to zebra")
+	return &zebra.Message{
+		Header: cli.CreateHeader(c, v),
+		Body:   b,
+	}
+}
+
+func newRouterIdAddMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE) *zebra.Message {
+	command := zebra.ROUTER_ID_ADD
+	var body zebra.Body = nil
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
+func newInterfaceAddMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE) *zebra.Message {
+	command := zebra.INTERFACE_ADD
+	var body zebra.Body = nil
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
+func newRedistributedAddMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE, t zebra.ROUTE_TYPE) *zebra.Message {
+	command := zebra.REDISTRIBUTE_ADD
+	var body zebra.Body = nil
+	if cli.GetRedistDefault() != t {
+		body = &zebra.RedistributeBody{
+			Redist: t,
+		}
+	} else {
+		return nil
+	}
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
+func newRedistributedDeleteMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE, t zebra.ROUTE_TYPE) *zebra.Message {
+	command := zebra.REDISTRIBUTE_DELETE
+	var body zebra.Body = nil
+	if t < zebra.ROUTE_MAX {
+		body = &zebra.RedistributeBody{
+			Redist: t,
+		}
+	} else {
+		return nil
+	}
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
+func newRedistributedDefaultAddMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE) *zebra.Message {
+	command := zebra.REDISTRIBUTE_DEFAULT_ADD
+	var body zebra.Body = nil
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
+func newRedistributedDefaultDeleteMassage(cli *zebra.Client, vrfId table.VRF_ID_YTPE) *zebra.Message {
+	command := zebra.REDISTRIBUTE_DEFAULT_DELETE
+	var body zebra.Body = nil
+	return newBaseMassage(cli, command, body, vrfId)
+}
+
 func newIPRouteMessage(cli *zebra.Client, path *table.Path, vrfs map[string]*table.Vrf) *zebra.Message {
 	f := func() table.VRF_ID_YTPE {
 		for _, vrf := range vrfs {
@@ -102,7 +165,7 @@ func newIPRouteMessage(cli *zebra.Client, path *table.Path, vrfs map[string]*tab
 		"Topic":        "Zebra",
 		"Type":         zebra.ROUTE_BGP,
 		"SAFI":         zebra.SAFI_UNICAST,
-		"VrfId":		vrfId,
+		"VrfId":        vrfId,
 		"Message":      flags,
 		"Prefix":       prefix,
 		"PrefixLength": uint8(plen),
@@ -140,7 +203,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 	log.WithFields(log.Fields{
 		"Topic":        "Zebra",
 		"RouteType":    body.Type.String(),
-		"VrfId":		header.GetVrf(),
+		"VrfId":        header.GetVrf(),
 		"Flag":         body.Flags.String(),
 		"Message":      body.Message,
 		"Prefix":       body.Prefix,
@@ -235,7 +298,7 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
 		}
 
-//		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
+		//		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
 		if b.Prefix != nil && len(b.Nexthops) > 0 {
 			p := createPathFromIPRouteMessage(msg, pi, server.globalRib.Vrfs)
 			msgs := server.propagateUpdate(nil, []*table.Path{p})
@@ -244,4 +307,27 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 	}
 
 	return nil
+}
+
+func newVrfZapiMsg(cli *zebra.Client, vrfId table.VRF_ID_YTPE, redists []string) []*broadcastZapiMsg {
+	msgs := make([]*broadcastZapiMsg, 0)
+	for _, typ := range redists {
+		t, err := zebra.RouteTypeFromString(typ)
+		if err != nil {
+			return nil
+		}
+		if m := newRedistributedAddMassage(cli, vrfId, t); m != nil {
+			b := &broadcastZapiMsg{
+				client: cli,
+				msg:    m,
+			}
+			msgs = append(msgs, b)
+		}
+	}
+	b := &broadcastZapiMsg{
+		client: cli,
+		msg:    newRedistributedDefaultAddMassage(cli, vrfId),
+	}
+	msgs = append(msgs, b)
+	return msgs
 }

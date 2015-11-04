@@ -338,6 +338,10 @@ func (c *Client) GetVersion() uint8 {
 	return c.version
 }
 
+func (c *Client) GetRedistDefault() ROUTE_TYPE {
+	return c.redistDefault
+}
+
 func (c *Client) Receive() chan *Message {
 	return c.incoming
 }
@@ -414,42 +418,6 @@ func (c *Client) sendHello(conn net.Conn) error {
 			return fmt.Errorf("failed to write: %s", err)
 		}
 
-	}
-	return nil
-}
-
-func (c *Client) SendRouterIDAdd() error {
-	return c.SendCommand(ROUTER_ID_ADD, nil)
-}
-
-func (c *Client) SendInterfaceAdd() error {
-	return c.SendCommand(INTERFACE_ADD, nil)
-}
-
-func (c *Client) SendRedistribute(t ROUTE_TYPE) error {
-	if c.redistDefault != t {
-		body := &RedistributeBody{
-			Redist: t,
-		}
-		if e := c.SendCommand(REDISTRIBUTE_ADD, body); e != nil {
-			return e
-		}
-	}
-
-	return nil
-}
-
-func (c *Client) SendRedistributeDelete(t ROUTE_TYPE) error {
-
-	if t < ROUTE_MAX {
-		body := &RedistributeBody{
-			Redist: t,
-		}
-		if e := c.SendCommand(REDISTRIBUTE_DELETE, body); e != nil {
-			return e
-		}
-	} else {
-		return fmt.Errorf("unknown route type: %d", t)
 	}
 	return nil
 }

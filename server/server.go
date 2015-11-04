@@ -1197,6 +1197,23 @@ func (server *BgpServer) handleVrfMod(arg *api.ModVrfArguments) ([]*table.Path, 
 		if err != nil {
 			return nil, err
 		}
+		g := server.bgpConfig.Global
+		redists := make([]string, 0, len(g.Zebra.RedistributeRouteTypeList))
+		for _, t := range g.Zebra.RedistributeRouteTypeList {
+			redists = append(redists, t.RouteType)
+		}
+		zlist := newVrfZapiMsg(server.zclient, rib.Vrfs[arg.Vrf.Name].VrfId, redists)
+		if zlist != nil && len(zlist) > 0 {
+			for _, z := range(zlist) {
+				log.WithFields(log.Fields{
+					"Topic":   "Server",
+					"Client":  z.client,
+					"Message": z.msg,
+				}).Debug("Default policy applied and rejected.")
+				server.broadcastMsgs = append(server.broadcastMsgs, z)
+			}
+		}
+
 	case api.Operation_DEL:
 		var err error
 		msgs, err = rib.DeleteVrf(arg.Vrf.Name)
@@ -2349,18 +2366,19 @@ func (server *BgpServer) NewZclient(url string, redistRouteTypes []string) error
 	if err != nil {
 		return err
 	}
-	cli.SendRouterIDAdd()
-	cli.SendInterfaceAdd()
+
+	cli.Send(newRouterIdAddMassage(cli, table.VRF_ID_DEFAULT))
+	cli.Send(newInterfaceAddMassage(cli, table.VRF_ID_DEFAULT))
 	for _, typ := range redistRouteTypes {
 		t, err := zebra.RouteTypeFromString(typ)
 		if err != nil {
 			return err
 		}
-		cli.SendRedistribute(t)
+		if m := newRedistributedAddMassage(cli, table.VRF_ID_DEFAULT, t); m != nil {
+			cli.Send(m)
+		}
 	}
-	if e := cli.SendCommand(zebra.REDISTRIBUTE_DEFAULT_ADD, nil); e != nil {
-		return e
-	}
+	cli.Send(newRedistributedDefaultAddMassage(cli, table.VRF_ID_DEFAULT))
 	server.zclient = cli
 	return nil
 }
