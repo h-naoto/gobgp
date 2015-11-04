@@ -200,6 +200,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 
 	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
 	pattr = append(pattr, origin)
+	extcomms := make([]bgp.ExtendedCommunityInterface, 0)
 
 	log.WithFields(log.Fields{
 		"Topic":        "Zebra",
@@ -236,6 +237,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 			n := nlri.(*bgp.IPAddrPrefix)
 			nlri = bgp.NewLabeledVPNIPAddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
 			pattr = append(pattr, nexthop)
+			extcomms = append(extcomms, vrf.ExportRt...)
 		} else {
 			nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())
 			nexthop := bgp.NewPathAttributeNextHop(body.Nexthops[0].String())
@@ -261,6 +263,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 			n := nlri.(*bgp.IPv6AddrPrefix)
 			nlri = bgp.NewLabeledVPNIPv6AddrPrefix(n.Length, n.Prefix.String(), *bgp.NewMPLSLabelStack(vrf.LabelMap[vrf.Name]), vrf.Rd)
 			pattr = append(pattr, nexthop)
+			extcomms = append(extcomms, vrf.ExportRt...)
 		} else {
 			nlri = bgp.NewIPv6AddrPrefix(body.PrefixLength, body.Prefix.String())
 			mpnlri = bgp.NewPathAttributeMpReachNLRI(body.Nexthops[0].String(), []bgp.AddrPrefixInterface{nlri})
@@ -274,6 +277,10 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo, vr
 
 	med := bgp.NewPathAttributeMultiExitDisc(body.Metric)
 	pattr = append(pattr, med)
+
+	if len(extcomms) > 0 {
+		pattr = append(pattr, bgp.NewPathAttributeExtendedCommunities(extcomms))
+	}
 
 	p := table.NewPath(peerInfo, nlri, isWithdraw, pattr, false, time.Now(), false)
 	p.IsFromZebra = true
@@ -303,8 +310,7 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
 		}
 
-		//		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
-		if b.Prefix != nil && len(b.Nexthops) > 0 {
+		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
 			p := createPathFromIPRouteMessage(msg, pi, server.globalRib.Vrfs)
 			msgs := server.propagateUpdate(nil, []*table.Path{p})
 			return msgs
