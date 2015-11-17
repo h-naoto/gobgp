@@ -142,9 +142,6 @@ func (m *OpsConfigManager) getBGPNeighborUUIDs(id uuid.UUID) ([]net.IP, []uuid.U
 func (m *OpsConfigManager) handleVrfUpdate(update ovsdb.TableUpdate) *server.GrpcRequest {
 	for _, v := range update.Rows {
 		if len(v.Old.Fields) == 0 {
-			log.WithFields(log.Fields{
-				"Topic": "openswitch",
-			}).Debug("new vrf")
 		} else if _, ok := v.Old.Fields["bgp_routers"]; ok {
 			_, _, err := m.getBGPRouterUUID()
 			if err != nil {
@@ -168,9 +165,7 @@ func (m *OpsConfigManager) handleBgpRouterUpdate(update ovsdb.TableUpdate) []*se
 		if uuid.Equal(id, uuid.Parse(k)) {
 			initial := false
 			if len(v.Old.Fields) == 0 {
-				log.WithFields(log.Fields{
-					"Topic": "openswitch",
-				}).Debug("new bgp router")
+
 				initial = true
 			}
 			if _, ok := v.Old.Fields["router_id"]; initial || ok {

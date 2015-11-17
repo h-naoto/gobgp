@@ -16,7 +16,6 @@
 package server
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/table"
 	"github.com/osrg/gobgp/zebra"
@@ -100,19 +99,7 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
 	pattr = append(pattr, origin)
 
-	log.WithFields(log.Fields{
-		"Topic":        "Zebra",
-		"RouteType":    body.Type.String(),
-		"Flag":         body.Flags.String(),
-		"Message":      body.Message,
-		"Prefix":       body.Prefix,
-		"PrefixLength": body.PrefixLength,
-		"Nexthop":      body.Nexthops,
-		"IfIndex":      body.Ifindexs,
-		"Metric":       body.Metric,
-		"Distance":     body.Distance,
-		"api":          header.Command.String(),
-	}).Debugf("create path from ip route message.")
+
 
 	if isV4 {
 		nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())

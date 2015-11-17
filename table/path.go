@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
@@ -44,11 +43,7 @@ type Path struct {
 
 func NewPath(source *PeerInfo, nlri bgp.AddrPrefixInterface, isWithdraw bool, pattrs []bgp.PathAttributeInterface, medSetByTargetNeighbor bool, timestamp time.Time, noImplicitWithdraw bool) *Path {
 	if !isWithdraw && pattrs == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   nlri.String(),
-			"Peer":  source.Address.String(),
-		}).Error("Need to provide patattrs for the path that is not withdraw.")
+
 		return nil
 	}
 
@@ -164,10 +159,7 @@ func (path *Path) UpdatePathAttrs(global *config.Global, peer *config.Neighbor) 
 		}
 
 	} else {
-		log.WithFields(log.Fields{
-			"Topic": "Peer",
-			"Key":   peer.NeighborConfig.NeighborAddress,
-		}).Warnf("invalid peer type: %d", peer.NeighborConfig.PeerType)
+
 	}
 }
 

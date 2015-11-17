@@ -123,10 +123,6 @@ func (w *mrtWatcher) loop() error {
 			}
 			bm, err := bgp.NewMRTMessage(uint32(m.timestamp.Unix()), bgp.BGP4MP, subtype, mp)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Topic": "mrt",
-					"Data":  m,
-				}).Warn(err)
 				return
 			}
 			buf, err := bm.Serialize()
@@ -135,10 +131,6 @@ func (w *mrtWatcher) loop() error {
 			}
 
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Topic": "mrt",
-					"Data":  m,
-				}).Warn(err)
 			}
 		}
 

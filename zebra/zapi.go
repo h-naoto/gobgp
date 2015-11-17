@@ -306,11 +306,7 @@ func (c *Client) Send(m *Message) {
 
 func (c *Client) SendCommand(command API_TYPE, body Body) error {
 
-	log.WithFields(log.Fields{
-		"Topic":   "Zebra",
-		"Command": command.String(),
-		"Body":    body,
-	}).Debug("send command to zebra")
+
 	m := &Message{
 		Header: Header{
 			Len:     HEADER_SIZE,

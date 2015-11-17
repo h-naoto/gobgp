@@ -204,12 +204,7 @@ func (manager *TableManager) ApplyPolicy(d PolicyDirection, paths []*Path) []*Pa
 			newpaths = append(newpaths, newpath)
 		case ROUTE_TYPE_REJECT:
 			path.Filtered = true
-			log.WithFields(log.Fields{
-				"Topic":     "Peer",
-				"Key":       path.GetSource().Address,
-				"Path":      path,
-				"Direction": d,
-			}).Debug("reject")
+
 		}
 	}
 	return newpaths
@@ -248,13 +243,7 @@ func (manager *TableManager) AddVrf(name string, rd bgp.RouteDistinguisherInterf
 	if _, ok := manager.Vrfs[name]; ok {
 		return nil, fmt.Errorf("vrf %s already exists", name)
 	}
-	log.WithFields(log.Fields{
-		"Topic":    "Vrf",
-		"Key":      name,
-		"Rd":       rd,
-		"ImportRt": importRt,
-		"ExportRt": exportRt,
-	}).Debugf("add vrf")
+
 	manager.Vrfs[name] = &Vrf{
 		Name:     name,
 		Rd:       rd,
@@ -283,13 +272,7 @@ func (manager *TableManager) DeleteVrf(name string) ([]*Path, error) {
 	for _, t := range manager.Tables {
 		msgs = append(msgs, t.deletePathsByVrf(vrf)...)
 	}
-	log.WithFields(log.Fields{
-		"Topic":    "Vrf",
-		"Key":      vrf.Name,
-		"Rd":       vrf.Rd,
-		"ImportRt": vrf.ImportRt,
-		"ExportRt": vrf.ExportRt,
-	}).Debugf("delete vrf")
+
 	delete(manager.Vrfs, name)
 	rtcTable := manager.Tables[bgp.RF_RTC_UC]
 	msgs = append(msgs, rtcTable.deleteRTCPathsByVrf(vrf, manager.Vrfs)...)
@@ -302,11 +285,6 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 	for _, destination := range destinationList {
 		// compute best path
 
-		log.WithFields(log.Fields{
-			"Topic": "table",
-			"Owner": manager.owner,
-			"Key":   destination.GetNlri().String(),
-		}).Debug("Processing destination")
 
 		newBestPath, reason, err := destination.Calculate()
 
@@ -320,55 +298,27 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 
 		if newBestPath != nil && newBestPath.Equal(currentBestPath) {
 			// best path is not changed
-			log.WithFields(log.Fields{
-				"Topic":    "table",
-				"Owner":    manager.owner,
-				"Key":      destination.GetNlri().String(),
-				"peer":     newBestPath.GetSource().Address,
-				"next_hop": newBestPath.GetNexthop().String(),
-				"reason":   reason,
-			}).Debug("best path is not changed")
+
 			continue
 		}
 
 		if newBestPath == nil {
-			log.WithFields(log.Fields{
-				"Topic": "table",
-				"Owner": manager.owner,
-				"Key":   destination.GetNlri().String(),
-			}).Debug("best path is nil")
+
 
 			if len(destination.GetKnownPathList()) == 0 {
 				// create withdraw path
 				if currentBestPath != nil {
-					log.WithFields(log.Fields{
-						"Topic":    "table",
-						"Owner":    manager.owner,
-						"Key":      destination.GetNlri().String(),
-						"peer":     currentBestPath.GetSource().Address,
-						"next_hop": currentBestPath.GetNexthop().String(),
-					}).Debug("best path is lost")
+
 
 					p := destination.GetBestPath()
 					newPaths = append(newPaths, p.Clone(p.Owner, true))
 				}
 				destination.setBestPath(nil)
 			} else {
-				log.WithFields(log.Fields{
-					"Topic": "table",
-					"Owner": manager.owner,
-					"Key":   destination.GetNlri().String(),
-				}).Error("known path list is not empty")
+
 			}
 		} else {
-			log.WithFields(log.Fields{
-				"Topic":    "table",
-				"Owner":    manager.owner,
-				"Key":      newBestPath.GetNlri().String(),
-				"peer":     newBestPath.GetSource().Address,
-				"next_hop": newBestPath.GetNexthop(),
-				"reason":   reason,
-			}).Debug("new best path")
+
 
 			newPaths = append(newPaths, newBestPath)
 			destination.setBestPath(newBestPath)
@@ -378,12 +328,7 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 			rf := destination.getRouteFamily()
 			t := manager.Tables[rf]
 			t.deleteDest(destination)
-			log.WithFields(log.Fields{
-				"Topic":        "table",
-				"Owner":        manager.owner,
-				"Key":          destination.GetNlri().String(),
-				"route_family": rf,
-			}).Debug("destination removed")
+
 		}
 	}
 	return newPaths, nil
@@ -495,12 +440,7 @@ func (manager *TableManager) GetBestPathList(rfList []bgp.RouteFamily) []*Path {
 func (manager *TableManager) ProcessUpdate(fromPeer *PeerInfo, message *bgp.BGPMessage) ([]*Path, error) {
 	// check msg's type if it's BGPUpdate
 	if message.Header.Type != bgp.BGP_MSG_UPDATE {
-		log.WithFields(log.Fields{
-			"Topic": "table",
-			"Owner": manager.owner,
-			"key":   fromPeer.Address.String(),
-			"Type":  message.Header.Type,
-		}).Warn("message is not BGPUpdate")
+
 		return []*Path{}, nil
 	}
 

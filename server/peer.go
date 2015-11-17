@@ -17,7 +17,6 @@ package server
 
 import (
 	"encoding/json"
-	log "github.com/Sirupsen/logrus"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
@@ -145,11 +144,7 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 	m := e.MsgData.(*bgp.BGPMessage)
 	bgpMsgList := []*bgp.BGPMessage{}
 	pathList := []*table.Path{}
-	log.WithFields(log.Fields{
-		"Topic": "Peer",
-		"Key":   peer.conf.NeighborConfig.NeighborAddress,
-		"data":  m,
-	}).Debug("received")
+
 	update := false
 
 	switch m.Header.Type {
@@ -175,11 +170,7 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 		rr := m.Body.(*bgp.BGPRouteRefresh)
 		rf := bgp.AfiSafiToRouteFamily(rr.AFI, rr.SAFI)
 		if _, ok := peer.rfMap[rf]; !ok {
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   peer.conf.NeighborConfig.NeighborAddress,
-				"Data":  rf,
-			}).Warn("Route family isn't supported")
+
 			break
 		}
 		if _, ok := peer.capMap[bgp.BGP_CAP_ROUTE_REFRESH]; ok {
@@ -193,10 +184,7 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 				pathList = append(pathList, path)
 			}
 		} else {
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   peer.conf.NeighborConfig.NeighborAddress,
-			}).Warn("ROUTE_REFRESH received but the capability wasn't advertised")
+
 		}
 
 	case bgp.BGP_MSG_UPDATE:
@@ -208,14 +196,8 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 			peer.adjRib.UpdateIn(pathList)
 		}
 	case bgp.BGP_MSG_NOTIFICATION:
-		body := m.Body.(*bgp.BGPNotification)
-		log.WithFields(log.Fields{
-			"Topic":   "Peer",
-			"Key":     peer.conf.NeighborConfig.NeighborAddress,
-			"Code":    body.ErrorCode,
-			"Subcode": body.ErrorSubcode,
-			"Data":    body.Data,
-		}).Warn("received notification")
+
+
 	}
 	return pathList, update, bgpMsgList
 }
@@ -229,10 +211,7 @@ func (peer *Peer) PassConn(conn *net.TCPConn) {
 	case peer.fsm.connCh <- conn:
 	default:
 		conn.Close()
-		log.WithFields(log.Fields{
-			"Topic": "Peer",
-			"Key":   peer.conf.NeighborConfig.NeighborAddress,
-		}).Warn("accepted conn is closed to avoid be blocked")
+
 	}
 }
 
@@ -436,12 +415,7 @@ func (peer *Peer) ApplyPolicy(d table.PolicyDirection, paths []*table.Path) ([]*
 				path.Filtered = true
 			}
 			filteredPaths = append(filteredPaths, path)
-			log.WithFields(log.Fields{
-				"Topic":     "Peer",
-				"Key":       peer.conf.NeighborConfig.NeighborAddress,
-				"Path":      path,
-				"Direction": d,
-			}).Debug("reject")
+
 		}
 	}
 	return newpaths, filteredPaths

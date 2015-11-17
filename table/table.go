@@ -16,7 +16,6 @@
 package table
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
 )
 
@@ -135,43 +134,24 @@ func (t *Table) deleteDest(dest *Destination) {
 
 func (t *Table) validatePath(path *Path) {
 	if path == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Error("path is nil")
 	}
 	if path.GetRouteFamily() != t.routeFamily {
-		log.WithFields(log.Fields{
-			"Topic":      "Table",
-			"Key":        t.routeFamily,
-			"Prefix":     path.GetNlri().String(),
-			"ReceivedRf": path.GetRouteFamily().String(),
-		}).Error("Invalid path. RouteFamily mismatch")
+
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH); attr != nil {
 		pathParam := attr.(*bgp.PathAttributeAsPath).Value
 		for _, as := range pathParam {
 			_, y := as.(*bgp.As4PathParam)
 			if !y {
-				log.WithFields(log.Fields{
-					"Topic": "Table",
-					"Key":   t.routeFamily,
-					"As":    as,
-				}).Fatal("AsPathParam must be converted to As4PathParam")
+
 			}
 		}
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS4_PATH); attr != nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Fatal("AS4_PATH must be converted to AS_PATH")
+
 	}
 	if path.GetNlri() == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Fatal("path's nlri is nil")
+
 	}
 }
 
@@ -180,10 +160,7 @@ func (t *Table) getOrCreateDest(nlri bgp.AddrPrefixInterface) *Destination {
 	dest := t.GetDestination(tableKey)
 	// If destination for given prefix does not exist we create it.
 	if dest == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   tableKey,
-		}).Debugf("create Destination")
+
 		dest = NewDestination(nlri)
 		t.setDestination(tableKey, dest)
 	}
