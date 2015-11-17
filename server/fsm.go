@@ -17,7 +17,6 @@ package server
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/table"
@@ -238,10 +237,7 @@ func (fsm *FSM) connectLoop() error {
 					if conn, err := d.Dial("tcp", host); err == nil {
 						fsm.connCh <- conn
 					} else {
-						log.WithFields(log.Fields{
-							"Topic": "Peer",
-							"Key":   fsm.pConf.NeighborConfig.NeighborAddress,
-						}).Debugf("failed to connect from ltcpaddr", err)
+
 					}
 				}
 
@@ -316,7 +312,6 @@ func (h *FSMHandler) idle() bgp.FSMState {
 				return bgp.BGP_FSM_ACTIVE
 
 			} else {
-				log.Debug("IdleHoldTimer expired, but stay at idle because the admin state is DOWN")
 			}
 
 		case s := <-fsm.adminStateCh:
@@ -368,12 +363,7 @@ func (h *FSMHandler) active() bgp.FSMState {
 				case ADMIN_STATE_DOWN:
 					return bgp.BGP_FSM_IDLE
 				case ADMIN_STATE_UP:
-					log.WithFields(log.Fields{
-						"Topic":      "Peer",
-						"Key":        fsm.pConf.NeighborConfig.NeighborAddress,
-						"State":      fsm.state,
-						"AdminState": s.String(),
-					}).Panic("code logic bug")
+
 				}
 			}
 		}
@@ -847,7 +837,6 @@ func (h *FSMHandler) loop() error {
 	}
 
 	e := time.AfterFunc(time.Second*120, func() {
-		log.Fatal("failed to free the fsm.h.t for ", fsm.pConf.NeighborConfig.NeighborAddress, oldState, nextState)
 	})
 	h.t.Wait()
 	e.Stop()

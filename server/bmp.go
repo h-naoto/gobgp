@@ -16,7 +16,6 @@
 package server
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/table"
@@ -61,7 +60,6 @@ func newBMPClient(conf config.BmpServers, connCh chan *bmpConn) (*bmpClient, err
 			if err != nil {
 				time.Sleep(30 * time.Second)
 			} else {
-				log.Info("bmp server is connected, ", addr)
 				connCh <- &bmpConn{
 					conn: conn.(*net.TCPConn),
 					addr: addr,

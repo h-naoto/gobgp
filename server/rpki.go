@@ -18,7 +18,6 @@ package server
 import (
 	"bufio"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/armon/go-radix"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
@@ -251,7 +250,6 @@ func newROAClient(as uint32, conf config.RpkiServers) (*roaClient, error) {
 		return c, nil
 	} else {
 		if len(conf.RpkiServerList) > 1 {
-			log.Warn("currently only one RPKI server is supposed")
 		}
 		c := conf.RpkiServerList[0].RpkiServerConfig
 		url = net.JoinHostPort(c.Address.String(), strconv.Itoa(int(c.Port)))

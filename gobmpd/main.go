@@ -19,7 +19,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+
 	"github.com/osrg/gobgp/packet"
 	"net"
 	"os"
@@ -34,13 +34,11 @@ func connLoop(conn *net.TCPConn) {
 	for scanner.Scan() {
 		msg, err := bgp.ParseBMPMessage(scanner.Bytes())
 		if err != nil {
-			log.Info(err)
 			continue
 		}
 		j, _ := json.Marshal(msg)
 		fmt.Print(string(j), "\n")
 	}
-	log.Info("conn was closed ", addr)
 }
 
 func main() {
@@ -49,17 +47,14 @@ func main() {
 
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		log.Info(err)
-		os.Exit(1)
+	os.Exit(1)
 	}
 
 	for {
 		conn, err := l.AcceptTCP()
 		if err != nil {
-			log.Info(err)
 			continue
 		}
-		log.Info("Accepted a new connection from ", conn.RemoteAddr())
 
 		go connLoop(conn)
 	}

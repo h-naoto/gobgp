@@ -18,7 +18,6 @@ package table
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
 	"net"
 	"reflect"
@@ -289,7 +288,6 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 		newBestPath, reason, err := destination.Calculate()
 
 		if err != nil {
-			log.Error(err)
 			continue
 		}
 

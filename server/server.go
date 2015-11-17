@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	log "github.com/Sirupsen/logrus"
 	"github.com/armon/go-radix"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
@@ -129,14 +128,12 @@ func listenAndAccept(proto string, port int, ch chan *net.TCPConn) (*net.TCPList
 
 	l, err := net.ListenTCP(proto, addr)
 	if err != nil {
-		log.Info(err)
 		return nil, err
 	}
 	go func() {
 		for {
 			conn, err := l.AcceptTCP()
 			if err != nil {
-				log.Info(err)
 				continue
 			}
 			ch <- conn
@@ -166,7 +163,6 @@ func (server *BgpServer) Serve() {
 	if g.Mrt.FileName != "" {
 		w, err := newMrtWatcher(g.Mrt.FileName)
 		if err != nil {
-			log.Warn(err)
 		} else {
 			server.watchers[WATCHER_MRT] = w
 		}
@@ -182,7 +178,6 @@ func (server *BgpServer) Serve() {
 		}
 		err := server.NewZclient(g.Zebra.Url, redists)
 		if err != nil {
-			log.Error(err)
 		}
 	}
 
@@ -231,7 +226,6 @@ func (server *BgpServer) Serve() {
 	l6, err2 := listenAndAccept("tcp6", server.listenPort, acceptCh)
 	server.listenerMap["tcp6"] = l6
 	if err1 != nil && err2 != nil {
-		log.Fatal("can't listen either v4 and v6")
 		os.Exit(1)
 	}
 
@@ -291,10 +285,8 @@ func (server *BgpServer) Serve() {
 					conn.Close()
 					return
 				}
-				log.Debug("accepted a new passive connection from ", remoteAddr)
 				peer.PassConn(conn)
 			} else {
-				log.Info("can't find configuration for a new passive connection from ", remoteAddr)
 				conn.Close()
 			}
 		}
@@ -349,7 +341,6 @@ func (server *BgpServer) Serve() {
 			addr := config.NeighborConfig.NeighborAddress.String()
 			_, found := server.neighborMap[addr]
 			if found {
-				log.Warn("Can't overwrite the exising peer ", addr)
 				continue
 			}
 
@@ -384,13 +375,12 @@ func (server *BgpServer) Serve() {
 			SetTcpMD5SigSockopts(listener(config.NeighborConfig.NeighborAddress), addr, "")
 			peer, found := server.neighborMap[addr]
 			if found {
-				log.Info("Delete a peer configuration for ", addr)
 				go func(addr string) {
-					t := time.AfterFunc(time.Minute*5, func() { log.Fatal("failed to free the fsm.h.t for ", addr) })
+					t := time.AfterFunc(time.Minute*5, func() {  })
 					peer.fsm.h.t.Kill(nil)
 					peer.fsm.h.t.Wait()
 					t.Stop()
-					t = time.AfterFunc(time.Minute*5, func() { log.Fatal("failed to free the fsm.h for ", addr) })
+					t = time.AfterFunc(time.Minute*5, func() {  })
 					peer.fsm.t.Kill(nil)
 					peer.fsm.t.Wait()
 					t.Stop()
@@ -402,7 +392,6 @@ func (server *BgpServer) Serve() {
 				}
 				delete(server.neighborMap, addr)
 			} else {
-				log.Info("Can't delete a peer configuration for ", addr)
 			}
 		case config := <-server.updatedPeerCh:
 			addr := config.NeighborConfig.NeighborAddress.String()
@@ -412,7 +401,6 @@ func (server *BgpServer) Serve() {
 		case e := <-server.fsmincomingCh:
 			peer, found := server.neighborMap[e.MsgSrc]
 			if !found {
-				log.Warn("Can't find the neighbor ", e.MsgSrc)
 				break
 			}
 			m := server.handleFSMMessage(peer, e, server.fsmincomingCh)
@@ -1425,10 +1413,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 
 		if grpcReq.RequestType == REQ_ADJ_RIB_IN {
 			paths = peer.adjRib.GetInPathList([]bgp.RouteFamily{rf})
-			log.Debugf("RouteFamily=%v adj-rib-in found : %d", rf.String(), len(paths))
 		} else {
 			paths = peer.adjRib.GetOutPathList([]bgp.RouteFamily{rf})
-			log.Debugf("RouteFamily=%v adj-rib-out found : %d", rf.String(), len(paths))
 		}
 
 		toResult := func(p *table.Path) *GrpcResponse {
@@ -1552,7 +1538,6 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_UP"
 			default:
-				log.Warning("previous request is still remaining. : ", peer.conf.NeighborConfig.NeighborAddress)
 				err.Code = api.Error_FAIL
 				err.Msg = "previous request is still remaining"
 			}
@@ -1563,7 +1548,6 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_DOWN"
 			default:
-				log.Warning("previous request is still remaining. : ", peer.conf.NeighborConfig.NeighborAddress)
 				err.Code = api.Error_FAIL
 				err.Msg = "previous request is still remaining"
 			}
@@ -1704,7 +1688,6 @@ func (server *BgpServer) handleGrpcModNeighbor(grpcReq *GrpcRequest) (sMsgs []*S
 		if ok {
 			return nil, fmt.Errorf("Can't overwrite the exising peer %s", addr)
 		} else {
-			log.Infof("Peer %s is added", addr)
 		}
 		SetTcpMD5SigSockopts(listener(net.ParseIP(addr)), addr, arg.Peer.Conf.AuthPassword)
 		var loc *table.TableManager
@@ -1807,13 +1790,12 @@ func (server *BgpServer) handleGrpcModNeighbor(grpcReq *GrpcRequest) (sMsgs []*S
 		server.broadcastPeerState(peer)
 	case api.Operation_DEL:
 		SetTcpMD5SigSockopts(listener(net.ParseIP(addr)), addr, "")
-		log.Info("Delete a peer configuration for ", addr)
 		go func(addr string) {
-			t := time.AfterFunc(time.Minute*5, func() { log.Fatal("failed to free the fsm.h.t for ", addr) })
+			t := time.AfterFunc(time.Minute*5, func() {  })
 			n.fsm.h.t.Kill(nil)
 			n.fsm.h.t.Wait()
 			t.Stop()
-			t = time.AfterFunc(time.Minute*5, func() { log.Fatal("failed to free the fsm.h for ", addr) })
+			t = time.AfterFunc(time.Minute*5, func() {  })
 			n.fsm.t.Kill(nil)
 			n.fsm.t.Wait()
 			t.Stop()

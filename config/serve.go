@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
-	log "github.com/Sirupsen/logrus"
 	"reflect"
 )
 
@@ -28,14 +27,11 @@ func ReadConfigfileServe(path string, configCh chan BgpConfigSet, reloadCh chan 
 
 		if err != nil {
 			if cnt == 0 {
-				log.Fatal("can't read config file ", path, ", ", err)
 			} else {
-				log.Warning("can't read config file ", path, ", ", err)
 				continue
 			}
 		}
 		if cnt == 0 {
-			log.Info("finished reading the config file")
 		}
 		cnt++
 		bgpConfig := BgpConfigSet{Bgp: b, Policy: p}
@@ -87,8 +83,6 @@ func UpdateConfig(curC *Bgp, newC *Bgp) (*Bgp, []Neighbor, []Neighbor, []Neighbo
 
 func CheckPolicyDifference(currentPolicy *RoutingPolicy, newPolicy *RoutingPolicy) bool {
 
-	log.Debug("current policy : ", currentPolicy)
-	log.Debug("newPolicy policy : ", newPolicy)
 
 	var result bool = false
 	if currentPolicy == nil && newPolicy == nil {

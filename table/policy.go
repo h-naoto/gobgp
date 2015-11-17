@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/armon/go-radix"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
@@ -1124,7 +1123,6 @@ func (c *NeighborCondition) Option() MatchOption {
 func (c *NeighborCondition) Evaluate(path *Path) bool {
 
 	if len(c.set.list) == 0 {
-		log.Debug("NeighborList doesn't have elements")
 		return true
 	}
 

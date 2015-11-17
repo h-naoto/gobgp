@@ -17,7 +17,6 @@ package server
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
 	"gopkg.in/tomb.v2"
 	"net"
@@ -168,7 +167,6 @@ func (w *mrtWatcher) loop() error {
 func mrtFileOpen(filename string) (*os.File, error) {
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
-		log.Warn(err)
 	}
 	return file, err
 }

@@ -17,7 +17,6 @@ package server
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/packet"
 	"golang.org/x/net/context"
@@ -88,7 +87,6 @@ func (s *Server) GetNeighbor(ctx context.Context, arg *api.Arguments) (*api.Peer
 
 	res := <-req.ResponseCh
 	if err := res.Err(); err != nil {
-		log.Debug(err.Error())
 		return nil, err
 	}
 
@@ -98,7 +96,6 @@ func (s *Server) GetNeighbor(ctx context.Context, arg *api.Arguments) (*api.Peer
 func handleMultipleResponses(req *GrpcRequest, f func(*GrpcResponse) error) error {
 	for res := range req.ResponseCh {
 		if err := res.Err(); err != nil {
-			log.Debug(err.Error())
 			req.EndCh <- struct{}{}
 			return err
 		}
@@ -179,7 +176,6 @@ func (s *Server) neighbor(reqType int, arg *api.Arguments) (*api.Error, error) {
 
 	res := <-req.ResponseCh
 	if err := res.Err(); err != nil {
-		log.Debug(err.Error())
 		return nil, err
 	}
 	return none, nil
@@ -232,7 +228,6 @@ func (s *Server) ModPath(stream api.GobgpApi_ModPathServer) error {
 
 		res := <-req.ResponseCh
 		if err := res.Err(); err != nil {
-			log.Debug(err.Error())
 			return err
 		}
 	}

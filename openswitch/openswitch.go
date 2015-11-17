@@ -18,7 +18,6 @@ package openswitch
 import (
 	"code.google.com/p/go-uuid/uuid"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/server"
@@ -157,7 +156,6 @@ func (m *OpsConfigManager) handleVrfUpdate(update ovsdb.TableUpdate) *server.Grp
 func (m *OpsConfigManager) handleBgpRouterUpdate(update ovsdb.TableUpdate) []*server.GrpcRequest {
 	asn, id, err := m.getBGPRouterUUID()
 	if err != nil {
-		log.Debugf("%s", err)
 		return nil
 	}
 	reqs := []*server.GrpcRequest{}
@@ -171,7 +169,6 @@ func (m *OpsConfigManager) handleBgpRouterUpdate(update ovsdb.TableUpdate) []*se
 			if _, ok := v.Old.Fields["router_id"]; initial || ok {
 				r, ok := v.New.Fields["router_id"].(string)
 				if !ok {
-					log.Debugf("router-id is not configured yet")
 					return nil
 				}
 				reqs = append(reqs, server.NewGrpcRequest(server.REQ_MOD_GLOBAL_CONFIG, "", bgp.RouteFamily(0), &api.ModGlobalConfigArguments{
@@ -215,7 +212,6 @@ func (m *OpsConfigManager) handleNeighborUpdate(update ovsdb.TableUpdate) []*ser
 			if uuid.Equal(id, uuid.Parse(k)) {
 				asn, ok := v.New.Fields["remote_as"].(float64)
 				if !ok {
-					log.Debugf("remote-as is not configured yet")
 					continue
 				}
 				reqs = append(reqs, server.NewGrpcRequest(server.REQ_MOD_NEIGHBOR, "", bgp.RouteFamily(0), &api.ModNeighborArguments{
@@ -284,7 +280,6 @@ func (m *OpsConfigManager) Serve() error {
 			reqs = reqs[1:]
 		case r := <-resCh:
 			if err := r.Err(); err != nil {
-				log.Errorf("operation failed. reqtype: %d, err: %s", res.RequestType, err)
 			}
 			ress = ress[1:]
 		}

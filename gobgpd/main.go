@@ -16,14 +16,12 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/Sirupsen/logrus/hooks/syslog"
 	"github.com/jessevdk/go-flags"
 	"github.com/osrg/gobgp/config"
 	ops "github.com/osrg/gobgp/openswitch"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/server"
-	"io/ioutil"
 	"log/syslog"
 	"net/http"
 	_ "net/http/pprof"
@@ -57,30 +55,15 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	} else {
 		if runtime.NumCPU() < opts.CPUs {
-			log.Errorf("Only %d CPUs are available but %d is specified", runtime.NumCPU(), opts.CPUs)
 			os.Exit(1)
 		}
 		runtime.GOMAXPROCS(opts.CPUs)
 	}
 
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		http.ListenAndServe("localhost:6060", nil)
 	}()
 
-	switch opts.LogLevel {
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	default:
-		log.SetLevel(log.InfoLevel)
-	}
-
-	if opts.DisableStdlog == true {
-		log.SetOutput(ioutil.Discard)
-	} else {
-		log.SetOutput(os.Stdout)
-	}
 
 	if opts.UseSyslog != "" {
 		dst := strings.SplitN(opts.UseSyslog, ":", 2)
@@ -135,20 +118,12 @@ func main() {
 			facility = syslog.LOG_LOCAL7
 		}
 
-		hook, err := logrus_syslog.NewSyslogHook(network, addr, syslog.LOG_INFO|facility, "bgpd")
+		_, err := logrus_syslog.NewSyslogHook(network, addr, syslog.LOG_INFO|facility, "bgpd")
 		if err != nil {
-			log.Error("Unable to connect to syslog daemon, ", opts.UseSyslog)
 			os.Exit(1)
-		} else {
-			log.AddHook(hook)
 		}
 	}
 
-	if opts.LogPlain == false {
-		log.SetFormatter(&log.JSONFormatter{})
-	}
-
-	log.Info("gobgpd started")
 
 	configCh := make(chan config.BgpConfigSet)
 	reloadCh := make(chan bool)
@@ -156,7 +131,6 @@ func main() {
 	if opts.Ops {
 		m, err := ops.NewOpsConfigManager(bgpServer.GrpcReqCh)
 		if err != nil {
-			log.Errorf("Failed to start ops config manager: %s", err)
 			os.Exit(1)
 		}
 		go m.Serve()
@@ -205,31 +179,25 @@ func main() {
 				// SetPolicy. But this should be
 				// handled more cleanly.
 				if err := bgpServer.SetPolicy(newConfig.Policy); err != nil {
-					log.Fatal(err)
 				}
 			} else {
 				if config.CheckPolicyDifference(policyConfig, &newConfig.Policy) {
-					log.Info("Policy config is updated")
 					bgpServer.UpdatePolicy(newConfig.Policy)
 				}
 			}
 
 			for _, p := range added {
-				log.Infof("Peer %v is added", p.NeighborConfig.NeighborAddress)
 				bgpServer.PeerAdd(p)
 			}
 			for _, p := range deleted {
-				log.Infof("Peer %v is deleted", p.NeighborConfig.NeighborAddress)
 				bgpServer.PeerDelete(p)
 			}
 			for _, p := range updated {
-				log.Infof("Peer %v is updated", p.NeighborConfig.NeighborAddress)
 				bgpServer.PeerUpdate(p)
 			}
 		case sig := <-sigCh:
 			switch sig {
 			case syscall.SIGHUP:
-				log.Info("reload the config file")
 				reloadCh <- true
 			case syscall.SIGKILL, syscall.SIGTERM:
 				bgpServer.Shutdown()
