@@ -44,11 +44,8 @@ type Path struct {
 
 func NewPath(source *PeerInfo, nlri bgp.AddrPrefixInterface, isWithdraw bool, pattrs []bgp.PathAttributeInterface, medSetByTargetNeighbor bool, timestamp time.Time, noImplicitWithdraw bool) *Path {
 	if !isWithdraw && pattrs == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   nlri.String(),
-			"Peer":  source.Address.String(),
-		}).Error("Need to provide patattrs for the path that is not withdraw.")
+		log.Errorf("Need to provide patattrs for the path that is not withdraw. Topic=Table, Key=%s, Peer=%s",
+			nlri.String(), source.Address.String())
 		return nil
 	}
 
@@ -164,10 +161,8 @@ func (path *Path) UpdatePathAttrs(global *config.Global, peer *config.Neighbor) 
 		}
 
 	} else {
-		log.WithFields(log.Fields{
-			"Topic": "Peer",
-			"Key":   peer.NeighborConfig.NeighborAddress,
-		}).Warnf("invalid peer type: %d", peer.NeighborConfig.PeerType)
+		log.Warnf("invalid peer type: %d. Topic=Peer, Key=%s, Peer=%s",
+			peer.NeighborConfig.PeerType, peer.NeighborConfig.NeighborAddress.String())
 	}
 }
 

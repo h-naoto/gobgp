@@ -199,11 +199,8 @@ func (server *BgpServer) Serve() {
 
 			for _, b := range m.messages {
 				if m.twoBytesAs == false && b.Header.Type == bgp.BGP_MSG_UPDATE {
-					log.WithFields(log.Fields{
-						"Topic": "Peer",
-						"Key":   m.destination,
-						"Data":  b,
-					}).Debug("update for 2byte AS peer")
+					log.Debugf("update for 2byte AS peer. Topic=Peer, Key=%s, Data=%v",
+						m.destination, b)
 					table.UpdatePathAttrs2ByteAs(b.Body.(*bgp.BGPUpdate))
 				}
 				w(m.sendCh, b)
@@ -286,12 +283,8 @@ func (server *BgpServer) Serve() {
 
 					host, _, _ := net.SplitHostPort(l.String())
 					if host != laddr.String() {
-						log.WithFields(log.Fields{
-							"Topic":           "Peer",
-							"Key":             remoteAddr,
-							"Configured addr": laddr.String(),
-							"Addr":            host,
-						}).Info("Mismatched local address")
+						log.Infof("Mismatched local address. Topic=Peer, Key=%s, Configured addr=%s, Addr=%s",
+							remoteAddr, laddr.String(), host)
 						return false
 					}
 					return true
@@ -476,12 +469,8 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 			// A router that recognizes the ORIGINATOR_ID attribute SHOULD
 			// ignore a route received with its BGP Identifier as the ORIGINATOR_ID.
 			if id := path.GetOriginatorID(); peer.gConf.GlobalConfig.RouterId.Equal(id) {
-				log.WithFields(log.Fields{
-					"Topic":        "Peer",
-					"Key":          remoteAddr,
-					"OriginatorID": id,
-					"Data":         path,
-				}).Debug("Originator ID is mine, ignore")
+				log.Debugf("Originator ID is mine, ignore. Topic=Peer, Key=%s, OriginatorID=%s, Data=%v",
+					remoteAddr.String(), id.String(), path)
 				continue
 			}
 			if info.RouteReflectorClient {
@@ -493,12 +482,8 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 				// the advertisement received SHOULD be ignored.
 				for _, clusterId := range path.GetClusterList() {
 					if clusterId.Equal(peer.fsm.peerInfo.RouteReflectorClusterID) {
-						log.WithFields(log.Fields{
-							"Topic":     "Peer",
-							"Key":       remoteAddr,
-							"ClusterID": clusterId,
-							"Data":      path,
-						}).Debug("cluster list path attribute has local cluster id, ignore")
+						log.Debugf("cluster list path attribute has local cluster id, ignore. Topic=Peer, Key=%s, ClusterID=%s, Data=%v",
+							remoteAddr.String(), clusterId.String(), path)
 						continue
 					}
 				}
@@ -506,21 +491,13 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 			}
 
 			if ignore {
-				log.WithFields(log.Fields{
-					"Topic": "Peer",
-					"Key":   remoteAddr,
-					"Data":  path,
-				}).Debug("From same AS, ignore.")
+				log.Debugf("From same AS, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
 				continue
 			}
 		}
 
 		if remoteAddr.Equal(path.GetSource().Address) {
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   remoteAddr,
-				"Data":  path,
-			}).Debug("From me, ignore.")
+			log.Debugf("From me, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
 			continue
 		}
 
@@ -533,11 +510,7 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 		}
 
 		if !send {
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   remoteAddr,
-				"Data":  path,
-			}).Debug("AS PATH loop, ignore.")
+			log.Debugf("AS PATH loop, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
 			continue
 		}
 		filtered = append(filtered, path.Clone(remoteAddr, path.IsWithdraw))
@@ -591,11 +564,8 @@ func (server *BgpServer) broadcastBests(bests []*table.Path) {
 			z := newBroadcastZapiBestMsg(server.zclient, path)
 			if z != nil {
 				server.broadcastMsgs = append(server.broadcastMsgs, z)
-				log.WithFields(log.Fields{
-					"Topic":   "Server",
-					"Client":  z.client,
-					"Message": z.msg,
-				}).Debug("Default policy applied and rejected.")
+				log.Debugf("Default policy applied and rejected. Topic=Server, Client=%v, Message=%v",
+					z.client,  z.msg)
 			}
 		}
 
@@ -851,11 +821,8 @@ func (server *BgpServer) handleFSMMessage(peer *Peer, e *FsmMsg, incoming chan *
 				msgs = append(msgs, server.propagateUpdate(peer, pathList)...)
 			}
 		default:
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   peer.conf.NeighborConfig.NeighborAddress,
-				"Data":  e.MsgData,
-			}).Panic("unknown msg type")
+			log.Panicf("unknown msg type. Topic=Peer, Key=%s, Data=%v",
+				peer.conf.NeighborConfig.NeighborAddress.String(), e.MsgData)
 		}
 	}
 	return msgs
@@ -902,10 +869,7 @@ func (server *BgpServer) setPolicyByConfig(p policyPoint, c config.ApplyPolicy) 
 	for _, dir := range []table.PolicyDirection{table.POLICY_DIRECTION_IN, table.POLICY_DIRECTION_IMPORT, table.POLICY_DIRECTION_EXPORT} {
 		ps, def, err := server.policy.GetAssignmentFromConfig(dir, c)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Topic": "Policy",
-				"Dir":   dir,
-			}).Errorf("failed to get policy info: %s", err)
+			log.Errorf("failed to get policy info: %s. Topic=Policy, Dir=%d", err, dir)
 			continue
 		}
 		p.SetDefaultPolicy(dir, def)
@@ -916,9 +880,7 @@ func (server *BgpServer) setPolicyByConfig(p policyPoint, c config.ApplyPolicy) 
 func (server *BgpServer) SetPolicy(pl config.RoutingPolicy) error {
 	p, err := table.NewRoutingPolicy(pl)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Topic": "Policy",
-		}).Errorf("failed to create routing policy: %s", err)
+		log.Errorf("failed to create routing policy: %s. Topic=Policy", err)
 		return err
 	}
 	server.policy = p
@@ -928,16 +890,11 @@ func (server *BgpServer) SetPolicy(pl config.RoutingPolicy) error {
 
 func (server *BgpServer) handlePolicy(pl config.RoutingPolicy) error {
 	if err := server.SetPolicy(pl); err != nil {
-		log.WithFields(log.Fields{
-			"Topic": "Policy",
-		}).Errorf("failed to set new policy: %s", err)
+		log.Errorf("failed to set new policy: %s. Topic=Policy", err)
 		return err
 	}
 	for _, peer := range server.neighborMap {
-		log.WithFields(log.Fields{
-			"Topic": "Peer",
-			"Key":   peer.conf.NeighborConfig.NeighborAddress,
-		}).Info("call set policy")
+		log.Infof("call set policy. Topic=Peer, Key=%s", peer.conf.NeighborConfig.NeighborAddress.String())
 		server.setPolicyByConfig(peer, peer.conf.ApplyPolicy)
 	}
 	return nil
@@ -1330,10 +1287,7 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 	var msgs []*SenderMsg
 
 	logOp := func(addr string, action string) {
-		log.WithFields(log.Fields{
-			"Topic": "Operation",
-			"Key":   addr,
-		}).Info(action)
+		log.Infof("%s. Topic=Operation, Key=%s", action, addr)
 	}
 
 	reqToPeers := func(grpcReq *GrpcRequest) ([]*Peer, error) {
@@ -1601,10 +1555,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		if grpcReq.RequestType == REQ_NEIGHBOR_ENABLE {
 			select {
 			case peer.fsm.adminStateCh <- ADMIN_STATE_UP:
-				log.WithFields(log.Fields{
-					"Topic": "Peer",
-					"Key":   peer.conf.NeighborConfig.NeighborAddress,
-				}).Debug("ADMIN_STATE_UP requested")
+				log.Debugf("ADMIN_STATE_UP requested. Topic=Peer, Key=%s",
+					peer.conf.NeighborConfig.NeighborAddress.String())
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_UP"
 			default:
@@ -1615,10 +1567,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		} else {
 			select {
 			case peer.fsm.adminStateCh <- ADMIN_STATE_DOWN:
-				log.WithFields(log.Fields{
-					"Topic": "Peer",
-					"Key":   peer.conf.NeighborConfig.NeighborAddress,
-				}).Debug("ADMIN_STATE_DOWN requested")
+				log.Debugf("ADMIN_STATE_DOWN requested. Topic=Peer, Key=%s",
+					peer.conf.NeighborConfig.NeighborAddress.String())
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_DOWN"
 			default:
@@ -2064,19 +2014,13 @@ func (server *BgpServer) handleGrpcModPolicy(grpcReq *GrpcRequest) error {
 		if server.policyInUse(y) {
 			return fmt.Errorf("can't delete. policy %s is in use", name)
 		}
-		log.WithFields(log.Fields{
-			"Topic": "Policy",
-			"Key":   name,
-		}).Debug("delete policy")
+		log.Debugf("delete policy. Topic=Policy, Key=%s", name)
 		delete(pMap, name)
 	}
 	if err == nil && arg.Operation != api.Operation_ADD && !arg.PreserveStatements {
 		for _, s := range y.Statements {
 			if !server.policy.StatementInUse(s) {
-				log.WithFields(log.Fields{
-					"Topic": "Policy",
-					"Key":   s.Name,
-				}).Debug("delete unused statement")
+				log.Debugf("delete unused statement. Topic=Policy, Key=%s", s.Name)
 				delete(sMap, s.Name)
 			}
 		}

@@ -295,11 +295,7 @@ func NewPrefix(c config.Prefix) (*Prefix, error) {
 		exp := regexp.MustCompile("(\\d+)\\.\\.(\\d+)")
 		elems := exp.FindStringSubmatch(maskRange)
 		if len(elems) != 3 {
-			log.WithFields(log.Fields{
-				"Topic":           "Policy",
-				"Type":            "Prefix",
-				"MaskRangeFormat": maskRange,
-			}).Warn("mask length range format is invalid.")
+			log.Warnf("mask length range format is invalid. Topic=Policy, Type=Prefix, MaskRangeFormat=%s", maskRange)
 			return nil, fmt.Errorf("mask length range format is invalid")
 		}
 		// we've already checked the range is sane by regexp
@@ -1057,12 +1053,7 @@ func (c *PrefixCondition) Evaluate(path *Path) bool {
 		result = !result
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":     "Policy",
-		"Condition": "prefix",
-		"Path":      path,
-		"Matched":   result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=Prefix, Path=%v, Matched=%v", path, result)
 
 	return result
 }
@@ -1153,12 +1144,8 @@ func (c *NeighborCondition) Evaluate(path *Path) bool {
 		result = !result
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":           "Policy",
-		"Condition":       "neighbor",
-		"NeighborAddress": path.Owner,
-		"Matched":         result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=Neighbor, NeighborAddress=%s, Matched=%v",
+		path.Owner.String(), result)
 
 	return result
 }
@@ -1258,12 +1245,7 @@ func (c *AsPathCondition) Evaluate(path *Path) bool {
 	if c.option == MATCH_OPTION_INVERT {
 		result = !result
 	}
-	log.WithFields(log.Fields{
-		"Topic":       "Policy",
-		"Condition":   "aspath",
-		"MatchOption": c.option,
-		"Matched":     result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=Aspath, MatchOption=%d, Matched=%v", c.option, result)
 	return result
 }
 
@@ -1349,12 +1331,7 @@ func (c *CommunityCondition) Evaluate(path *Path) bool {
 	if c.option == MATCH_OPTION_INVERT {
 		result = !result
 	}
-	log.WithFields(log.Fields{
-		"Topic":       "Policy",
-		"Condition":   "community",
-		"MatchOption": c.option,
-		"Matched":     result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=Community, MatchOption=%d, Matched=%v", c.option, result)
 	return result
 }
 
@@ -1446,12 +1423,7 @@ func (c *ExtCommunityCondition) Evaluate(path *Path) bool {
 		result = !result
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":       "Policy",
-		"Condition":   "community",
-		"MatchOption": c.option,
-		"Matched":     result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=ExtCommunity, MatchOption=%d, Matched=%v", c.option, result)
 	return result
 }
 
@@ -1516,12 +1488,7 @@ func (c *AsPathLengthCondition) Evaluate(path *Path) bool {
 		result = c.length >= length
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":     "Policy",
-		"Condition": "aspath length",
-		"Reason":    c.operator,
-		"Matched":   result,
-	}).Debug("evaluation result")
+	log.Debugf("evaluation result. Topic=Policy, Condition=AspathLength, Reason=%d, Matched=%v", c.operator, result)
 
 	return result
 }
@@ -1716,12 +1683,8 @@ func (a *CommunityAction) Apply(path *Path) *Path {
 	case config.BGP_SET_COMMUNITY_OPTION_TYPE_REPLACE:
 		path.SetCommunities(a.list, true)
 	}
-	log.WithFields(log.Fields{
-		"Topic":  "Policy",
-		"Action": "community",
-		"Values": a.list,
-		"Method": a.action,
-	}).Debug("community action applied")
+	log.Debugf("community action applied. Topic=Policy, Condition=Community, Values=%v, Method=%d", a.list, a.action)
+
 	return path
 }
 
@@ -1958,17 +1921,9 @@ func (a *MedAction) Apply(path *Path) *Path {
 	}
 
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Topic": "Policy",
-			"Type":  "Med Action",
-		}).Warn(err)
+		log.Warnf("%s. Topic=Policy, Type=Med Action", err)
 	} else {
-		log.WithFields(log.Fields{
-			"Topic":      "Policy",
-			"Action":     "med",
-			"Value":      a.value,
-			"ActionType": a.action,
-		}).Debug("med action applied")
+		log.Debugf("med action applied. Topic=Policy, Action=Med, Value=%d, ActionType=%d", a.value, a.action)
 	}
 
 	return path
@@ -2027,38 +1982,21 @@ func (a *AsPathPrependAction) Apply(path *Path) *Path {
 	if a.useLeftMost {
 		aspath := path.GetAsSeqList()
 		if len(aspath) == 0 {
-			log.WithFields(log.Fields{
-				"Topic": "Policy",
-				"Type":  "AsPathPrepend Action",
-			}).Warnf("aspath length is zero.")
+			log.Warnf("aspath length is zero. Topic=Policy, Type=AsPathPrepend Action")
 			return path
 		}
 		asn = aspath[0]
 		if asn == 0 {
-			log.WithFields(log.Fields{
-				"Topic": "Policy",
-				"Type":  "AsPathPrepend Action",
-			}).Warnf("left-most ASN is not seq")
+			log.Warnf("left-most ASN is not seq. Topic=Policy, Type=AsPathPrepend Action")
 			return path
 		}
-		log.WithFields(log.Fields{
-			"Topic":  "Policy",
-			"Type":   "AsPathPrepend Action",
-			"LastAs": asn,
-			"Repeat": a.repeat,
-		}).Debug("use left-most ASN")
+		log.Debugf("use left-most ASN. Topic=Policy, Type=AsPathPrepend Action, LastAs=%d, Repeat=%d", asn, a.repeat)
 	} else {
 		asn = a.asn
 	}
 
 	path.PrependAsn(asn, a.repeat)
-
-	log.WithFields(log.Fields{
-		"Topic":  "Policy",
-		"Action": "aspath prepend",
-		"ASN":    asn,
-		"Repeat": a.repeat,
-	}).Debug("aspath prepend action applied")
+	log.Debugf("aspath prepend action applied. Topic=Policy, Type=AsPathPrepend, ASN=%d, Repeat=%d", asn, a.repeat)
 
 	return path
 }
@@ -2125,11 +2063,7 @@ func (s *Statement) Evaluate(p *Path) bool {
 
 func (s *Statement) Apply(path *Path) (RouteType, *Path) {
 	result := s.Evaluate(path)
-	log.WithFields(log.Fields{
-		"Topic":      "Policy",
-		"Path":       path,
-		"PolicyName": s.Name,
-	}).Debug("statement evaluate : ", result)
+	log.Debugf("statement evaluate : %v. Topic=Policy, Path=%v, PolicyName=%s", result, path, s.Name)
 	if result {
 		if len(s.ModActions) != 0 {
 			// apply all modification actions
@@ -2140,11 +2074,7 @@ func (s *Statement) Apply(path *Path) (RouteType, *Path) {
 		}
 		//Routing action
 		if s.RouteAction == nil {
-			log.WithFields(log.Fields{
-				"Topic":      "Policy",
-				"Path":       path,
-				"PolicyName": s.Name,
-			}).Warn("route action is nil")
+			log.Warnf("route action is nil. Topic=Policy, Path=%v, PolicyName=%s", path, s.Name)
 			return ROUTE_TYPE_NONE, path
 		}
 		p := s.RouteAction.Apply(path)

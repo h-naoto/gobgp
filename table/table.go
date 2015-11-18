@@ -135,43 +135,27 @@ func (t *Table) deleteDest(dest *Destination) {
 
 func (t *Table) validatePath(path *Path) {
 	if path == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Error("path is nil")
+		log.Errorf("path is nil. Topic=Table, key=%s", t.routeFamily.String())
 	}
 	if path.GetRouteFamily() != t.routeFamily {
-		log.WithFields(log.Fields{
-			"Topic":      "Table",
-			"Key":        t.routeFamily,
-			"Prefix":     path.GetNlri().String(),
-			"ReceivedRf": path.GetRouteFamily().String(),
-		}).Error("Invalid path. RouteFamily mismatch")
+		log.Errorf("Invalid path. RouteFamily mismatch. Topic=Table, key=%s, Prefix=%s, ReceivedRF=%s",
+			t.routeFamily.String(), path.GetNlri().String(), path.GetRouteFamily().String())
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH); attr != nil {
 		pathParam := attr.(*bgp.PathAttributeAsPath).Value
 		for _, as := range pathParam {
 			_, y := as.(*bgp.As4PathParam)
 			if !y {
-				log.WithFields(log.Fields{
-					"Topic": "Table",
-					"Key":   t.routeFamily,
-					"As":    as,
-				}).Fatal("AsPathParam must be converted to As4PathParam")
+				log.Fatalf("AsPathParam must be converted to As4PathParam. Topic=Table, key=%s, As=%s",
+					t.routeFamily.String(), as.String())
 			}
 		}
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS4_PATH); attr != nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Fatal("AS4_PATH must be converted to AS_PATH")
+		log.Fatalf("AS4_PATH must be converted to AS_PATH. Topic=Table, key=%s", t.routeFamily.String())
 	}
 	if path.GetNlri() == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   t.routeFamily,
-		}).Fatal("path's nlri is nil")
+		log.Fatalf("path's nlri is nil. Topic=Table, key=%s", t.routeFamily.String())
 	}
 }
 
@@ -180,10 +164,7 @@ func (t *Table) getOrCreateDest(nlri bgp.AddrPrefixInterface) *Destination {
 	dest := t.GetDestination(tableKey)
 	// If destination for given prefix does not exist we create it.
 	if dest == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   tableKey,
-		}).Debugf("create Destination")
+		log.Debugf("create Destination. Topic=Table, key=%s", tableKey)
 		dest = NewDestination(nlri)
 		t.setDestination(tableKey, dest)
 	}

@@ -219,12 +219,8 @@ func (dd *Destination) addNewPath(newPath *Path) {
 func (dd *Destination) validatePath(path *Path) {
 	if path == nil || path.GetRouteFamily() != dd.routeFamily {
 
-		log.WithFields(log.Fields{
-			"Topic":      "Table",
-			"Key":        dd.GetNlri().String(),
-			"Path":       path,
-			"ExpectedRF": dd.routeFamily,
-		}).Error("path is nil or invalid route family")
+		log.Errorf("path is nil or invalid route family. Topic=Table, Key=%s, Path=%v, ExpectedRF=%s",
+			dd.GetNlri().String(), path, dd.routeFamily.String())
 	}
 }
 
@@ -248,12 +244,8 @@ func (dest *Destination) Calculate() (*Path, string, error) {
 		// it becomes best path.
 		dest.knownPathList = append(dest.knownPathList, dest.newPathList[0])
 		dest.newPathList, _ = deleteAt(dest.newPathList, 0)
-		log.WithFields(log.Fields{
-			"Topic":  "Table",
-			"Key":    dest.GetNlri().String(),
-			"Path":   dest.knownPathList[0],
-			"Reason": BPR_ONLY_PATH,
-		}).Debug("best path")
+		log.Debugf("best path. Topic=Table, Key=%s, Path=%v, Reason=%d",
+			dest.GetNlri().String(), dest.knownPathList[0], BPR_ONLY_PATH)
 
 		return dest.knownPathList[0], BPR_ONLY_PATH, nil
 	}
@@ -298,20 +290,14 @@ func (dest *Destination) removeWithdrawals() {
 		return
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":  "Table",
-		"Key":    dest.GetNlri().String(),
-		"Length": len(dest.withdrawList),
-	}).Debug("Removing withdrawals")
+	log.Debugf("Removing withdrawals. Topic=Table, Key=%s, Length=%d",
+		dest.GetNlri().String(), len(dest.withdrawList))
 
 	// If we have some withdrawals and no know-paths, it means it is safe to
 	// delete these withdraws.
 	if len(dest.knownPathList) == 0 {
-		log.WithFields(log.Fields{
-			"Topic":  "Table",
-			"Key":    dest.GetNlri().String(),
-			"Length": len(dest.withdrawList),
-		}).Debug("Found withdrawals for path(s) that did not get installed")
+		log.Debugf("Found withdrawals for path(s) that did not get installed. Topic=Table, Key=%s, Length=%d",
+			dest.GetNlri().String(), len(dest.withdrawList))
 
 		dest.withdrawList = dest.withdrawList[len(dest.withdrawList):]
 	}
@@ -337,22 +323,15 @@ func (dest *Destination) removeWithdrawals() {
 
 		// We do no have any match for this withdraw.
 		if !isFound {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  withdraw,
-			}).Debug("No matching path for withdraw found, may be path was not installed into table")
+			log.Debugf("No matching path for withdraw found, may be path was not installed into table. Topic=Table, Key=%s, Path=%v",
+				dest.GetNlri().String(), withdraw)
 		}
 	}
 
 	// If we have partial match.
 	if len(matches) != len(dest.withdrawList) {
-		log.WithFields(log.Fields{
-			"Topic":          "Table",
-			"Key":            dest.GetNlri().String(),
-			"MatchLength":    len(matches),
-			"WithdrawLength": len(dest.withdrawList),
-		}).Debug("Did not find match for some withdrawals.")
+		log.Debugf("Did not find match for some withdrawals. Topic=Table, Key=%s, MatchLength=%d, WithdrawLength=%d",
+			dest.GetNlri().String(), len(dest.withdrawList))
 	}
 
 	// Clear matching paths and withdrawals.
@@ -360,22 +339,16 @@ func (dest *Destination) removeWithdrawals() {
 		var result bool = false
 		dest.knownPathList, result = removeWithPath(dest.knownPathList, path)
 		if !result {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  path,
-			}).Debug("could not remove path from knownPathList")
+			log.Debugf("could not remove path from knownPathList. Topic=Table, Key=%s, Path=%v",
+				dest.GetNlri().String(), path)
 		}
 	}
 	for _, path := range wMatches {
 		var result bool = false
 		dest.withdrawList, result = removeWithPath(dest.withdrawList, path)
 		if !result {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  path,
-			}).Debug("could not remove path from withdrawList")
+			log.Debugf("could not remove path from withdrawList. Topic=Table, Key=%s, Path=%v",
+				dest.GetNlri().String(), path)
 		}
 	}
 }
@@ -436,18 +409,11 @@ func (dest *Destination) removeOldPaths() {
 			match := false
 			knownPaths, match = removeWithPath(knownPaths, oldPath)
 			if !match {
-				log.WithFields(log.Fields{
-					"Topic": "Table",
-					"Key":   dest.GetNlri().String(),
-					"Path":  oldPath,
-				}).Debug("not matched")
-
+				log.Debugf("not matched. Topic=Table, Key=%s, Path=%v",
+					dest.GetNlri().String(), oldPath)
 			}
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  oldPath,
-			}).Debug("Implicit withdrawal of old path, since we have learned new path from the same peer")
+			log.Debugf("Implicit withdrawal of old path, since we have learned new path from the same peer. Topic=Table, Key=%s, Path=%v",
+				dest.GetNlri().String(), oldPath)
 		}
 	}
 	dest.knownPathList = knownPaths
@@ -648,12 +614,8 @@ func compareByASPath(path1, path2 *Path) *Path {
 	_, attribute2 := path2.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH)
 
 	if attribute1 == nil || attribute2 == nil {
-		log.WithFields(log.Fields{
-			"Topic":   "Table",
-			"Key":     "compareByASPath",
-			"ASPath1": attribute1,
-			"ASPath2": attribute2,
-		}).Warn("can't compare ASPath because it's not present")
+		log.Warnf("can't compare ASPath because it's not present. Topic=Table, Key=compareByASPath, ASPath1=%s, ASPath2=%s",
+			attribute1.String(), attribute2.String())
 	}
 
 	l1 := path1.GetAsPathLen()
@@ -679,12 +641,8 @@ func compareByOrigin(path1, path2 *Path) *Path {
 	_, attribute2 := path2.getPathAttr(bgp.BGP_ATTR_TYPE_ORIGIN)
 
 	if attribute1 == nil || attribute2 == nil {
-		log.WithFields(log.Fields{
-			"Topic":   "Table",
-			"Key":     "compareByOrigin",
-			"Origin1": attribute1,
-			"Origin2": attribute2,
-		}).Error("can't compare origin because it's not present")
+		log.Warnf("can't compare origin because it's not present. Topic=Table, Key=compareByOrigin, ASPath1=%s, ASPath2=%s",
+			attribute1.String(), attribute2.String())
 		return nil
 	}
 
