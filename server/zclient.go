@@ -99,10 +99,10 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 
 	origin := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_IGP)
 	pattr = append(pattr, origin)
-	log.Debugf("create path from ip route message. Topic=Zebra, RouteType=%s, Flag=%s, Message=%d, Prefix=%s,"+
-		"PrefixLength=%d, Nexthop=%v, IfIndex=%v, Metric=%d, Distance=%d, Api=%s",
-		body.Type.String(), body.Flags.String(), body.Message, body.Prefix.String(), body.PrefixLength,
-		body.Nexthops, body.Ifindexs, body.Metric, body.Distance, header.Command.String())
+	log.Debugf("create path from ip route message. Topic=Zebra, RouteType=%d, Flag=%d, Message=%d, Prefix=%v,"+
+		"PrefixLength=%d, Nexthop=%v, IfIndex=%v, Metric=%d, Distance=%d, Api=%d",
+		body.Type, body.Flags, body.Message, body.Prefix, body.PrefixLength,
+		body.Nexthops, body.Ifindexs, body.Metric, body.Distance, header.Command)
 
 	if isV4 {
 		nlri = bgp.NewIPAddrPrefix(body.PrefixLength, body.Prefix.String())

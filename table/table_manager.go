@@ -204,8 +204,8 @@ func (manager *TableManager) ApplyPolicy(d PolicyDirection, paths []*Path) []*Pa
 			newpaths = append(newpaths, newpath)
 		case ROUTE_TYPE_REJECT:
 			path.Filtered = true
-			log.Debugf("reject. Topic=Peer, key=%s, Path=%v, Direction=%d",
-				path.GetSource().Address.String(), path, d)
+			log.Debugf("reject. Topic=Peer, key=%v, Path=%v, Direction=%d",
+				path.GetSource().Address, path, d)
 		}
 	}
 	return newpaths
@@ -244,8 +244,8 @@ func (manager *TableManager) AddVrf(name string, rd bgp.RouteDistinguisherInterf
 	if _, ok := manager.Vrfs[name]; ok {
 		return nil, fmt.Errorf("vrf %s already exists", name)
 	}
-	log.Debugf("add vrf. Topic=Vrf, key=%s, Rd=%s, ImportRt=%v, ExportRt=%v",
-		name, rd.String(), importRt, exportRt)
+	log.Debugf("add vrf. Topic=Vrf, key=%s, Rd=%v, ImportRt=%v, ExportRt=%v",
+		name, rd, importRt, exportRt)
 	manager.Vrfs[name] = &Vrf{
 		Name:     name,
 		Rd:       rd,
@@ -274,8 +274,8 @@ func (manager *TableManager) DeleteVrf(name string) ([]*Path, error) {
 	for _, t := range manager.Tables {
 		msgs = append(msgs, t.deletePathsByVrf(vrf)...)
 	}
-	log.Debugf("adelete vrf. Topic=Vrf, key=%s, Rd=%s, ImportRt=%v, ExportRt=%v",
-		vrf.Name, vrf.Rd.String(), vrf.ImportRt, vrf.ExportRt)
+	log.Debugf("adelete vrf. Topic=Vrf, key=%s, Rd=%v, ImportRt=%v, ExportRt=%v",
+		vrf.Name, vrf.Rd, vrf.ImportRt, vrf.ExportRt)
 	delete(manager.Vrfs, name)
 	rtcTable := manager.Tables[bgp.RF_RTC_UC]
 	msgs = append(msgs, rtcTable.deleteRTCPathsByVrf(vrf, manager.Vrfs)...)
@@ -288,8 +288,8 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 	for _, destination := range destinationList {
 		// compute best path
 
-		log.Debugf("Processing destination. Topic=Table, key=%s, Owner=%s",
-			destination.GetNlri().String(), manager.owner)
+		log.Debugf("Processing destination. Topic=Table, key=%v, Owner=%s",
+			destination.GetNlri(), manager.owner)
 
 		newBestPath, reason, err := destination.Calculate()
 
@@ -303,35 +303,35 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 
 		if newBestPath != nil && newBestPath.Equal(currentBestPath) {
 			// best path is not changed
-			log.Debugf("best path is not changed. Topic=Table, key=%s, Owner=%s, Peer=%s, Nexthop=%s, Reasson=%v",
-				destination.GetNlri().String(), manager.owner,newBestPath.GetSource().Address.String(),
-				newBestPath.GetNexthop().String(), reason)
+			log.Debugf("best path is not changed. Topic=Table, key=%v, Owner=%s, Peer=%v, Nexthop=%v, Reasson=%v",
+				destination.GetNlri(), manager.owner,newBestPath.GetSource().Address,
+				newBestPath.GetNexthop(), reason)
 			continue
 		}
 
 		if newBestPath == nil {
-			log.Debugf("best path is nil. Topic=Table, key=%s, Owner=%s",
-				destination.GetNlri().String(), manager.owner)
+			log.Debugf("best path is nil. Topic=Table, key=%v, Owner=%s",
+				destination.GetNlri(), manager.owner)
 
 			if len(destination.GetKnownPathList()) == 0 {
 				// create withdraw path
 				if currentBestPath != nil {
-					log.Debugf("best path is lost. Topic=Table, key=%s, Owner=%s, Peer=%s, Nexthop=%s",
-						destination.GetNlri().String(), manager.owner,newBestPath.GetSource().Address.String(),
-						newBestPath.GetNexthop().String())
+					log.Debugf("best path is lost. Topic=Table, key=%v, Owner=%s, Peer=%v, Nexthop=%v",
+						destination.GetNlri(), manager.owner,newBestPath.GetSource().Address,
+						newBestPath.GetNexthop())
 
 					p := destination.GetBestPath()
 					newPaths = append(newPaths, p.Clone(p.Owner, true))
 				}
 				destination.setBestPath(nil)
 			} else {
-				log.Debugf("known path list is not empty. Topic=Table, key=%s, Owner=%s",
-					destination.GetNlri().String(), manager.owner)
+				log.Debugf("known path list is not empty. Topic=Table, key=%v, Owner=%s",
+					destination.GetNlri(), manager.owner)
 			}
 		} else {
-			log.Debugf("new best path. Topic=Table, key=%s, Owner=%s, Peer=%s, Nexthop=%s",
-				destination.GetNlri().String(), manager.owner,newBestPath.GetSource().Address.String(),
-				newBestPath.GetNexthop().String())
+			log.Debugf("new best path. Topic=Table, key=%v, Owner=%s, Peer=%v, Nexthop=%v",
+				destination.GetNlri(), manager.owner,newBestPath.GetSource().Address,
+				newBestPath.GetNexthop())
 
 			newPaths = append(newPaths, newBestPath)
 			destination.setBestPath(newBestPath)
@@ -341,8 +341,8 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 			rf := destination.getRouteFamily()
 			t := manager.Tables[rf]
 			t.deleteDest(destination)
-			log.Debugf("destination removed. Topic=Table, key=%s, Owner=%s, RouteFamily=%s, Nexthop=%s",
-				destination.GetNlri().String(), manager.owner, rf.String())
+			log.Debugf("destination removed. Topic=Table, key=%v, Owner=%s, RouteFamily=%d",
+				destination.GetNlri(), manager.owner, rf)
 		}
 	}
 	return newPaths, nil
@@ -454,8 +454,8 @@ func (manager *TableManager) GetBestPathList(rfList []bgp.RouteFamily) []*Path {
 func (manager *TableManager) ProcessUpdate(fromPeer *PeerInfo, message *bgp.BGPMessage) ([]*Path, error) {
 	// check msg's type if it's BGPUpdate
 	if message.Header.Type != bgp.BGP_MSG_UPDATE {
-		log.Warnf("message is not BGPUpdate. Topic=Table, key=%s, Owner=%s, Type=%d",
-			fromPeer.Address.String(), manager.owner, message.Header.Type)
+		log.Warnf("message is not BGPUpdate. Topic=Table, key=%v, Owner=%s, Type=%d",
+			fromPeer.Address, manager.owner, message.Header.Type)
 		return []*Path{}, nil
 	}
 

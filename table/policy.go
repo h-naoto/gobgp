@@ -1144,8 +1144,8 @@ func (c *NeighborCondition) Evaluate(path *Path) bool {
 		result = !result
 	}
 
-	log.Debugf("evaluation result. Topic=Policy, Condition=Neighbor, NeighborAddress=%s, Matched=%v",
-		path.Owner.String(), result)
+	log.Debugf("evaluation result. Topic=Policy, Condition=Neighbor, NeighborAddress=%v, Matched=%v",
+		path.Owner, result)
 
 	return result
 }

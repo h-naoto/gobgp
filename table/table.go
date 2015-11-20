@@ -135,27 +135,27 @@ func (t *Table) deleteDest(dest *Destination) {
 
 func (t *Table) validatePath(path *Path) {
 	if path == nil {
-		log.Errorf("path is nil. Topic=Table, key=%s", t.routeFamily.String())
+		log.Errorf("path is nil. Topic=Table, key=%d", t.routeFamily)
 	}
 	if path.GetRouteFamily() != t.routeFamily {
-		log.Errorf("Invalid path. RouteFamily mismatch. Topic=Table, key=%s, Prefix=%s, ReceivedRF=%s",
-			t.routeFamily.String(), path.GetNlri().String(), path.GetRouteFamily().String())
+		log.Errorf("Invalid path. RouteFamily mismatch. Topic=Table, key=%d, Prefix=%v, ReceivedRF=%d",
+			t.routeFamily, path.GetNlri(), path.GetRouteFamily())
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH); attr != nil {
 		pathParam := attr.(*bgp.PathAttributeAsPath).Value
 		for _, as := range pathParam {
 			_, y := as.(*bgp.As4PathParam)
 			if !y {
-				log.Fatalf("AsPathParam must be converted to As4PathParam. Topic=Table, key=%s, As=%s",
-					t.routeFamily.String(), as.String())
+				log.Fatalf("AsPathParam must be converted to As4PathParam. Topic=Table, key=%d, As=%s",
+					t.routeFamily, as.String())
 			}
 		}
 	}
 	if _, attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS4_PATH); attr != nil {
-		log.Fatalf("AS4_PATH must be converted to AS_PATH. Topic=Table, key=%s", t.routeFamily.String())
+		log.Fatalf("AS4_PATH must be converted to AS_PATH. Topic=Table, key=%d", t.routeFamily)
 	}
 	if path.GetNlri() == nil {
-		log.Fatalf("path's nlri is nil. Topic=Table, key=%s", t.routeFamily.String())
+		log.Fatalf("path's nlri is nil. Topic=Table, key=%d", t.routeFamily)
 	}
 }
 

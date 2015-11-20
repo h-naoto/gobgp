@@ -145,8 +145,8 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 	m := e.MsgData.(*bgp.BGPMessage)
 	bgpMsgList := []*bgp.BGPMessage{}
 	pathList := []*table.Path{}
-	log.Debugf("received. Topic=Peer, Key=%s, Data=%v",
-		peer.conf.NeighborConfig.NeighborAddress.String(), m)
+	log.Debugf("received. Topic=Peer, Key=%v, Data=%v",
+		peer.conf.NeighborConfig.NeighborAddress, m)
 	update := false
 
 	switch m.Header.Type {
@@ -172,8 +172,8 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 		rr := m.Body.(*bgp.BGPRouteRefresh)
 		rf := bgp.AfiSafiToRouteFamily(rr.AFI, rr.SAFI)
 		if _, ok := peer.rfMap[rf]; !ok {
-			log.Warnf("Route family isn't supported. Topic=Peer, Key=%s, Data=%d",
-				peer.conf.NeighborConfig.NeighborAddress.String(), rf)
+			log.Warnf("Route family isn't supported. Topic=Peer, Key=%v, Data=%d",
+				peer.conf.NeighborConfig.NeighborAddress, rf)
 			break
 		}
 		if _, ok := peer.capMap[bgp.BGP_CAP_ROUTE_REFRESH]; ok {
@@ -187,8 +187,8 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 				pathList = append(pathList, path)
 			}
 		} else {
-			log.Warnf("ROUTE_REFRESH received but the capability wasn't advertised. Topic=Peer, Key=%s",
-				peer.conf.NeighborConfig.NeighborAddress.String())
+			log.Warnf("ROUTE_REFRESH received but the capability wasn't advertised. Topic=Peer, Key=%v",
+				peer.conf.NeighborConfig.NeighborAddress)
 		}
 
 	case bgp.BGP_MSG_UPDATE:
@@ -201,8 +201,8 @@ func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMe
 		}
 	case bgp.BGP_MSG_NOTIFICATION:
 		body := m.Body.(*bgp.BGPNotification)
-		log.Warnf("received notification. Topic=Peer, Key=%s, Code=%d, Subcode=%d, Data=%v",
-			peer.conf.NeighborConfig.NeighborAddress.String(), body.ErrorCode, body.ErrorSubcode, body.Data)
+		log.Warnf("received notification. Topic=Peer, Key=%v, Code=%d, Subcode=%d, Data=%v",
+			peer.conf.NeighborConfig.NeighborAddress, body.ErrorCode, body.ErrorSubcode, body.Data)
 	}
 	return pathList, update, bgpMsgList
 }
@@ -216,8 +216,8 @@ func (peer *Peer) PassConn(conn *net.TCPConn) {
 	case peer.fsm.connCh <- conn:
 	default:
 		conn.Close()
-		log.Warnf("accepted conn is closed to avoid be blocked. Topic=Peer, Key=%s",
-			peer.conf.NeighborConfig.NeighborAddress.String())
+		log.Warnf("accepted conn is closed to avoid be blocked. Topic=Peer, Key=%v",
+			peer.conf.NeighborConfig.NeighborAddress)
 	}
 }
 
@@ -421,8 +421,8 @@ func (peer *Peer) ApplyPolicy(d table.PolicyDirection, paths []*table.Path) ([]*
 				path.Filtered = true
 			}
 			filteredPaths = append(filteredPaths, path)
-			log.Debugf("reject. Topic=Peer, Key=%s, Path=%v, Direction=%d",
-				peer.conf.NeighborConfig.NeighborAddress.String(), path, d)
+			log.Debugf("reject. Topic=Peer, Key=%v, Path=%v, Direction=%d",
+				peer.conf.NeighborConfig.NeighborAddress, path, d)
 		}
 	}
 	return newpaths, filteredPaths

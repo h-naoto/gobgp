@@ -283,8 +283,8 @@ func (server *BgpServer) Serve() {
 
 					host, _, _ := net.SplitHostPort(l.String())
 					if host != laddr.String() {
-						log.Infof("Mismatched local address. Topic=Peer, Key=%s, Configured addr=%s, Addr=%s",
-							remoteAddr, laddr.String(), host)
+						log.Infof("Mismatched local address. Topic=Peer, Key=%s, Configured addr=%v, Addr=%s",
+							remoteAddr, laddr, host)
 						return false
 					}
 					return true
@@ -469,8 +469,8 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 			// A router that recognizes the ORIGINATOR_ID attribute SHOULD
 			// ignore a route received with its BGP Identifier as the ORIGINATOR_ID.
 			if id := path.GetOriginatorID(); peer.gConf.GlobalConfig.RouterId.Equal(id) {
-				log.Debugf("Originator ID is mine, ignore. Topic=Peer, Key=%s, OriginatorID=%s, Data=%v",
-					remoteAddr.String(), id.String(), path)
+				log.Debugf("Originator ID is mine, ignore. Topic=Peer, Key=%v, OriginatorID=%v, Data=%v",
+					remoteAddr, id, path)
 				continue
 			}
 			if info.RouteReflectorClient {
@@ -482,8 +482,8 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 				// the advertisement received SHOULD be ignored.
 				for _, clusterId := range path.GetClusterList() {
 					if clusterId.Equal(peer.fsm.peerInfo.RouteReflectorClusterID) {
-						log.Debugf("cluster list path attribute has local cluster id, ignore. Topic=Peer, Key=%s, ClusterID=%s, Data=%v",
-							remoteAddr.String(), clusterId.String(), path)
+						log.Debugf("cluster list path attribute has local cluster id, ignore. Topic=Peer, Key=%v, ClusterID=%v, Data=%v",
+							remoteAddr, clusterId, path)
 						continue
 					}
 				}
@@ -491,13 +491,13 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 			}
 
 			if ignore {
-				log.Debugf("From same AS, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
+				log.Debugf("From same AS, ignore. Topic=Peer, Key=%v, Data=%v", remoteAddr, path)
 				continue
 			}
 		}
 
 		if remoteAddr.Equal(path.GetSource().Address) {
-			log.Debugf("From me, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
+			log.Debugf("From me, ignore. Topic=Peer, Key=%v, Data=%v", remoteAddr, path)
 			continue
 		}
 
@@ -510,7 +510,7 @@ func filterpath(peer *Peer, pathList []*table.Path) []*table.Path {
 		}
 
 		if !send {
-			log.Debugf("AS PATH loop, ignore. Topic=Peer, Key=%s, Data=%v", remoteAddr.String(), path)
+			log.Debugf("AS PATH loop, ignore. Topic=Peer, Key=%v, Data=%v", remoteAddr, path)
 			continue
 		}
 		filtered = append(filtered, path.Clone(remoteAddr, path.IsWithdraw))
@@ -821,8 +821,8 @@ func (server *BgpServer) handleFSMMessage(peer *Peer, e *FsmMsg, incoming chan *
 				msgs = append(msgs, server.propagateUpdate(peer, pathList)...)
 			}
 		default:
-			log.Panicf("unknown msg type. Topic=Peer, Key=%s, Data=%v",
-				peer.conf.NeighborConfig.NeighborAddress.String(), e.MsgData)
+			log.Panicf("unknown msg type. Topic=Peer, Key=%v, Data=%v",
+				peer.conf.NeighborConfig.NeighborAddress, e.MsgData)
 		}
 	}
 	return msgs
@@ -894,7 +894,7 @@ func (server *BgpServer) handlePolicy(pl config.RoutingPolicy) error {
 		return err
 	}
 	for _, peer := range server.neighborMap {
-		log.Infof("call set policy. Topic=Peer, Key=%s", peer.conf.NeighborConfig.NeighborAddress.String())
+		log.Infof("call set policy. Topic=Peer, Key=%v", peer.conf.NeighborConfig.NeighborAddress)
 		server.setPolicyByConfig(peer, peer.conf.ApplyPolicy)
 	}
 	return nil
@@ -1431,10 +1431,10 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 
 		if grpcReq.RequestType == REQ_ADJ_RIB_IN {
 			paths = peer.adjRib.GetInPathList([]bgp.RouteFamily{rf})
-			log.Debugf("RouteFamily=%v adj-rib-in found : %d", rf.String(), len(paths))
+			log.Debugf("RouteFamily=%d adj-rib-in found : %d", rf, len(paths))
 		} else {
 			paths = peer.adjRib.GetOutPathList([]bgp.RouteFamily{rf})
-			log.Debugf("RouteFamily=%v adj-rib-out found : %d", rf.String(), len(paths))
+			log.Debugf("RouteFamily=%d adj-rib-out found : %d", rf, len(paths))
 		}
 
 		toResult := func(p *table.Path) *GrpcResponse {
@@ -1555,8 +1555,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		if grpcReq.RequestType == REQ_NEIGHBOR_ENABLE {
 			select {
 			case peer.fsm.adminStateCh <- ADMIN_STATE_UP:
-				log.Debugf("ADMIN_STATE_UP requested. Topic=Peer, Key=%s",
-					peer.conf.NeighborConfig.NeighborAddress.String())
+				log.Debugf("ADMIN_STATE_UP requested. Topic=Peer, Key=%v",
+					peer.conf.NeighborConfig.NeighborAddress\)
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_UP"
 			default:
@@ -1567,8 +1567,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		} else {
 			select {
 			case peer.fsm.adminStateCh <- ADMIN_STATE_DOWN:
-				log.Debugf("ADMIN_STATE_DOWN requested. Topic=Peer, Key=%s",
-					peer.conf.NeighborConfig.NeighborAddress.String())
+				log.Debugf("ADMIN_STATE_DOWN requested. Topic=Peer, Key=%v",
+					peer.conf.NeighborConfig.NeighborAddress)
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_DOWN"
 			default:
