@@ -1556,7 +1556,7 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 			select {
 			case peer.fsm.adminStateCh <- ADMIN_STATE_UP:
 				log.Debugf("ADMIN_STATE_UP requested. Topic=Peer, Key=%v",
-					peer.conf.NeighborConfig.NeighborAddress\)
+					peer.conf.NeighborConfig.NeighborAddress)
 				err.Code = api.Error_SUCCESS
 				err.Msg = "ADMIN_STATE_UP"
 			default:
