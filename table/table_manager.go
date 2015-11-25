@@ -204,12 +204,7 @@ func (manager *TableManager) ApplyPolicy(d PolicyDirection, paths []*Path) []*Pa
 			newpaths = append(newpaths, newpath)
 		case ROUTE_TYPE_REJECT:
 			path.Filtered = true
-			log.WithFields(log.Fields{
-				"Topic":     "Peer",
-				"Key":       path.GetSource().Address,
-				"Path":      path,
-				"Direction": d,
-			}).Debug("reject")
+			log.Debugf("reject route. Peer=%v, Path=%v, Direction=%d",path.GetSource().Address, path, d)
 		}
 	}
 	return newpaths
@@ -302,12 +297,6 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 	for _, destination := range destinationList {
 		// compute best path
 
-		log.WithFields(log.Fields{
-			"Topic": "table",
-			"Owner": manager.owner,
-			"Key":   destination.GetNlri().String(),
-		}).Debug("Processing destination")
-
 		newBestPath, reason, err := destination.Calculate()
 
 		if err != nil {
@@ -320,34 +309,17 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 
 		if newBestPath != nil && newBestPath.Equal(currentBestPath) {
 			// best path is not changed
-			log.WithFields(log.Fields{
-				"Topic":    "table",
-				"Owner":    manager.owner,
-				"Key":      destination.GetNlri().String(),
-				"peer":     newBestPath.GetSource().Address,
-				"next_hop": newBestPath.GetNexthop().String(),
-				"reason":   reason,
-			}).Debug("best path is not changed")
 			continue
 		}
 
 		if newBestPath == nil {
-			log.WithFields(log.Fields{
-				"Topic": "table",
-				"Owner": manager.owner,
-				"Key":   destination.GetNlri().String(),
-			}).Debug("best path is nil")
+			log.Debugf("best path is nil. Owner=%v, Prefix=%v", manager.owner, destination.GetNlri())
 
 			if len(destination.GetKnownPathList()) == 0 {
 				// create withdraw path
 				if currentBestPath != nil {
-					log.WithFields(log.Fields{
-						"Topic":    "table",
-						"Owner":    manager.owner,
-						"Key":      destination.GetNlri().String(),
-						"peer":     currentBestPath.GetSource().Address,
-						"next_hop": currentBestPath.GetNexthop().String(),
-					}).Debug("best path is lost")
+					log.Debugf("best path is lost. Owner=%v, Prefix=%v, Peer=%v, Nexthop=%v",
+						manager.owner, destination.GetNlri(), currentBestPath.GetSource().Address, currentBestPath.GetNexthop())
 
 					p := destination.GetBestPath()
 					newPaths = append(newPaths, p.Clone(p.Owner, true))
@@ -361,14 +333,8 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 				}).Error("known path list is not empty")
 			}
 		} else {
-			log.WithFields(log.Fields{
-				"Topic":    "table",
-				"Owner":    manager.owner,
-				"Key":      newBestPath.GetNlri().String(),
-				"peer":     newBestPath.GetSource().Address,
-				"next_hop": newBestPath.GetNexthop(),
-				"reason":   reason,
-			}).Debug("new best path")
+			log.Debugf("new best path. Owner=%v, Prefix=%v, Peer=%v, Nexthop=%v, Reason=%s",
+				manager.owner,newBestPath.GetNlri(), newBestPath.GetNlri().String(), newBestPath.GetNexthop(), reason)
 
 			newPaths = append(newPaths, newBestPath)
 			destination.setBestPath(newBestPath)
@@ -378,12 +344,8 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 			rf := destination.getRouteFamily()
 			t := manager.Tables[rf]
 			t.deleteDest(destination)
-			log.WithFields(log.Fields{
-				"Topic":        "table",
-				"Owner":        manager.owner,
-				"Key":          destination.GetNlri().String(),
-				"route_family": rf,
-			}).Debug("destination removed")
+			log.Debugf("destination removed. Owner=%v, Prefix=%v, RouteFamily=%v",
+				manager.owner, destination.GetNlri(), rf)
 		}
 	}
 	return newPaths, nil

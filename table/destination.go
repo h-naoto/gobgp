@@ -240,20 +240,15 @@ func (dest *Destination) Calculate() (*Path, string, error) {
 		// it becomes best path.
 		dest.knownPathList = append(dest.knownPathList, dest.newPathList[0])
 		dest.newPathList, _ = deleteAt(dest.newPathList, 0)
-		log.WithFields(log.Fields{
-			"Topic":  "Table",
-			"Key":    dest.GetNlri().String(),
-			"Path":   dest.knownPathList[0],
-			"Reason": BPR_ONLY_PATH,
-		}).Debug("best path")
-
+		log.Debugf("best path. Prefix=%v, path=%v, Reason=%d",
+			dest.GetNlri(), dest.knownPathList[0], BPR_ONLY_PATH )
 		return dest.knownPathList[0], BPR_ONLY_PATH, nil
 	}
 
 	// If we have a new version of old/known path we use it and delete old
 	// one.
 	dest.removeOldPaths()
-	log.Debugf("removeOldPaths")
+	log.Debugf("removeOldPaths: ", dest.GetNlri())
 	// Collect all new paths into known paths.
 	dest.knownPathList = append(dest.knownPathList, dest.newPathList...)
 
@@ -290,20 +285,11 @@ func (dest *Destination) removeWithdrawals() {
 		return
 	}
 
-	log.WithFields(log.Fields{
-		"Topic":  "Table",
-		"Key":    dest.GetNlri().String(),
-		"Length": len(dest.withdrawList),
-	}).Debug("Removing withdrawals")
-
+	log.Debugf("Removing withdrawals: ", dest.GetNlri())
 	// If we have some withdrawals and no know-paths, it means it is safe to
 	// delete these withdraws.
 	if len(dest.knownPathList) == 0 {
-		log.WithFields(log.Fields{
-			"Topic":  "Table",
-			"Key":    dest.GetNlri().String(),
-			"Length": len(dest.withdrawList),
-		}).Debug("Found withdrawals for path(s) that did not get installed")
+		log.Debug("Found withdrawals for path(s) that did not get installed: ", dest.GetNlri())
 
 		dest.withdrawList = dest.withdrawList[len(dest.withdrawList):]
 	}
@@ -329,22 +315,14 @@ func (dest *Destination) removeWithdrawals() {
 
 		// We do no have any match for this withdraw.
 		if !isFound {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  withdraw,
-			}).Debug("No matching path for withdraw found, may be path was not installed into table")
+			log.Debugf("No matching path for withdraw found, may be path was not installed into table: ",
+				dest.GetNlri())
 		}
 	}
 
 	// If we have partial match.
 	if len(matches) != len(dest.withdrawList) {
-		log.WithFields(log.Fields{
-			"Topic":          "Table",
-			"Key":            dest.GetNlri().String(),
-			"MatchLength":    len(matches),
-			"WithdrawLength": len(dest.withdrawList),
-		}).Debug("Did not find match for some withdrawals.")
+		log.Debugf("Did not find match for some withdrawals: ", dest.GetNlri())
 	}
 
 	// Clear matching paths and withdrawals.
@@ -352,22 +330,15 @@ func (dest *Destination) removeWithdrawals() {
 		var result bool = false
 		dest.knownPathList, result = removeWithPath(dest.knownPathList, path)
 		if !result {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  path,
-			}).Debug("could not remove path from knownPathList")
+			log.Debugf("could not remove path from knownPathList: ", dest.GetNlri())
 		}
 	}
 	for _, path := range wMatches {
 		var result bool = false
 		dest.withdrawList, result = removeWithPath(dest.withdrawList, path)
 		if !result {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  path,
-			}).Debug("could not remove path from withdrawList")
+			log.Debugf("could not remove path from withdrawList. Prefix=%v, Path=%v",
+				dest.GetNlri(), path)
 		}
 	}
 }
@@ -428,18 +399,11 @@ func (dest *Destination) removeOldPaths() {
 			match := false
 			knownPaths, match = removeWithPath(knownPaths, oldPath)
 			if !match {
-				log.WithFields(log.Fields{
-					"Topic": "Table",
-					"Key":   dest.GetNlri().String(),
-					"Path":  oldPath,
-				}).Debug("not matched")
+				log.Debugf("not matched. Prefix=%v, Path=%v",	dest.GetNlri(), oldPath)
 
 			}
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  oldPath,
-			}).Debug("Implicit withdrawal of old path, since we have learned new path from the same peer")
+			log.Debugf("Implicit withdrawal of old path, since we have learned new path from the same peer. Prefix=%v, Path=%v",
+				dest.GetNlri(), oldPath)
 		}
 	}
 	dest.knownPathList = knownPaths
@@ -635,17 +599,11 @@ func compareByASPath(path1, path2 *Path) *Path {
 	//
 	// Shortest as-path length is preferred. If both path have same lengths,
 	// we return None.
-	log.Debugf("enter compareByASPath")
 	_, attribute1 := path1.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH)
 	_, attribute2 := path2.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH)
 
 	if attribute1 == nil || attribute2 == nil {
-		log.WithFields(log.Fields{
-			"Topic":   "Table",
-			"Key":     "compareByASPath",
-			"ASPath1": attribute1,
-			"ASPath2": attribute2,
-		}).Warn("can't compare ASPath because it's not present")
+		log.Warnf("can't compare ASPath because it's not present -- l1: %d, l2: %d", attribute1, attribute2)
 	}
 
 	l1 := path1.GetAsPathLen()
@@ -666,17 +624,11 @@ func compareByOrigin(path1, path2 *Path) *Path {
 	//
 	//	IGP is preferred over EGP; EGP is preferred over Incomplete.
 	//	If both paths have same origin, we return None.
-	log.Debugf("enter compareByOrigin")
 	_, attribute1 := path1.getPathAttr(bgp.BGP_ATTR_TYPE_ORIGIN)
 	_, attribute2 := path2.getPathAttr(bgp.BGP_ATTR_TYPE_ORIGIN)
 
 	if attribute1 == nil || attribute2 == nil {
-		log.WithFields(log.Fields{
-			"Topic":   "Table",
-			"Key":     "compareByOrigin",
-			"Origin1": attribute1,
-			"Origin2": attribute2,
-		}).Error("can't compare origin because it's not present")
+		log.Errorf("can't compare origin because it's not present -- l1: %d, l2: %d", attribute1, attribute2)
 		return nil
 	}
 
@@ -703,7 +655,6 @@ func compareByMED(path1, path2 *Path) *Path {
 	//	RFC says lower MED is preferred over higher MED value.
 	//  compare MED among not only same AS path but also all path,
 	//  like bgp always-compare-med
-	log.Debugf("enter compareByMED")
 	getMed := func(path *Path) uint32 {
 		_, attribute := path.getPathAttr(bgp.BGP_ATTR_TYPE_MULTI_EXIT_DISC)
 		if attribute == nil {
@@ -730,8 +681,6 @@ func compareByASNumber(path1, path2 *Path) *Path {
 	//
 	//eBGP path is preferred over iBGP. If both paths are from same kind of
 	//peers, return None.
-	log.Debugf("enter compareByASNumber")
-
 	log.Debugf("compareByASNumber -- p1Asn: %d, p2Asn: %d", path1.source.AS, path2.source.AS)
 	// If one path is from ibgp peer and another is from ebgp peer, take the ebgp path
 	if path1.IsIBGP() != path2.IsIBGP() {
@@ -761,7 +710,6 @@ func compareByRouterID(path1, path2 *Path) (*Path, error) {
 	//	not pick best-path based on this criteria.
 	//	RFC: http://tools.ietf.org/html/rfc5004
 	//	We pick best path between two iBGP paths as usual.
-	log.Debugf("enter compareByRouterID")
 
 	// If both paths are from NC we have same router Id, hence cannot compare.
 	if path1.IsLocal() && path2.IsLocal() {

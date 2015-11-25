@@ -180,10 +180,7 @@ func (t *Table) getOrCreateDest(nlri bgp.AddrPrefixInterface) *Destination {
 	dest := t.GetDestination(tableKey)
 	// If destination for given prefix does not exist we create it.
 	if dest == nil {
-		log.WithFields(log.Fields{
-			"Topic": "Table",
-			"Key":   tableKey,
-		}).Debugf("create Destination")
+		log.Debugf("create Destination: %s", tableKey)
 		dest = NewDestination(nlri)
 		t.setDestination(tableKey, dest)
 	}
