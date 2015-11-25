@@ -524,7 +524,6 @@ func compareByReachableNexthop(path1, path2 *Path) *Path {
 	//
 	//	If no path matches this criteria, return None.
 	//  However RouteServer doesn't need to check reachability, so return nil.
-	log.Debugf("enter compareByReachableNexthop -- path1: %s, path2: %s", path1, path2)
 	return nil
 }
 
@@ -535,7 +534,6 @@ func compareByHighestWeight(path1, path2 *Path) *Path {
 	//	is configured.
 	//	Return:
 	//	nil if best path among given paths cannot be decided, else best path.
-	log.Debugf("enter compareByHighestWeight -- path1: %s, path2: %s", path1, path2)
 	return nil
 }
 
@@ -548,7 +546,6 @@ func compareByLocalPref(path1, path2 *Path) *Path {
 	//	we return None.
 	//
 	//	# Default local-pref values is 100
-	log.Debugf("enter compareByLocalPref")
 	_, attribute1 := path1.getPathAttr(bgp.BGP_ATTR_TYPE_LOCAL_PREF)
 	_, attribute2 := path2.getPathAttr(bgp.BGP_ATTR_TYPE_LOCAL_PREF)
 
@@ -577,7 +574,6 @@ func compareByLocalOrigin(path1, path2 *Path) *Path {
 	// Returns None if given paths have same source.
 	//
 	// If both paths are from same sources we cannot compare them here.
-	log.Debugf("enter compareByLocalOrigin")
 	if path1.GetSource().Equal(path2.GetSource()) {
 		return nil
 	}
@@ -699,7 +695,6 @@ func compareByIGPCost(path1, path2 *Path) *Path {
 	//
 	//	Return None if igp cost is same.
 	// Currently BGPS has no concept of IGP and IGP cost.
-	log.Debugf("enter compareByIGPCost -- path1: %v, path2: %v", path1, path2)
 	return nil
 }
 
