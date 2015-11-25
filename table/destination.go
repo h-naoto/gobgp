@@ -240,15 +240,15 @@ func (dest *Destination) Calculate() (*Path, string, error) {
 		// it becomes best path.
 		dest.knownPathList = append(dest.knownPathList, dest.newPathList[0])
 		dest.newPathList, _ = deleteAt(dest.newPathList, 0)
-		log.Debugf("best path. Prefix=%v, path=%v, Reason=%d",
-			dest.GetNlri(), dest.knownPathList[0], BPR_ONLY_PATH )
+//		log.Debugf("best path. Prefix=%v, path=%v, Reason=%d",
+//			dest.GetNlri(), dest.knownPathList[0], BPR_ONLY_PATH )
 		return dest.knownPathList[0], BPR_ONLY_PATH, nil
 	}
 
 	// If we have a new version of old/known path we use it and delete old
 	// one.
 	dest.removeOldPaths()
-	log.Debugf("removeOldPaths: ", dest.GetNlri())
+//	log.Debugf("removeOldPaths")
 	// Collect all new paths into known paths.
 	dest.knownPathList = append(dest.knownPathList, dest.newPathList...)
 
@@ -352,7 +352,7 @@ func (dest *Destination) computeKnownBestPath() (*Path, string, error) {
 		return nil, "", fmt.Errorf("Need at-least one known path to compute best path")
 	}
 
-	log.Debugf("computeKnownBestPath known pathlist: %d", len(dest.knownPathList))
+//	log.Debugf("computeKnownBestPath known pathlist: %d", len(dest.knownPathList))
 
 	// We pick the first path as current best path. This helps in breaking
 	// tie between two new paths learned in one cycle for which best-path

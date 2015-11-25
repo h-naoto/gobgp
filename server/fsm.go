@@ -799,12 +799,12 @@ func (h *FSMHandler) sendMessageloop() error {
 			conn.Close()
 			return fmt.Errorf("closed")
 		} else {
-			log.WithFields(log.Fields{
-				"Topic": "Peer",
-				"Key":   fsm.pConf.NeighborConfig.NeighborAddress,
-				"State": fsm.state,
-				"data":  m,
-			}).Debug("sent")
+//			log.WithFields(log.Fields{
+//				"Topic": "Peer",
+//				"Key":   fsm.pConf.NeighborConfig.NeighborAddress,
+//				"State": fsm.state,
+//				"data":  m,
+//			}).Debug("sent")
 		}
 		return nil
 	}
