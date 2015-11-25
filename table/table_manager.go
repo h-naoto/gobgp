@@ -333,8 +333,8 @@ func (manager *TableManager) calculate(destinationList []*Destination) ([]*Path,
 				}).Error("known path list is not empty")
 			}
 		} else {
-			log.Debugf("new best path. Owner=%v, Prefix=%v, Peer=%v, Nexthop=%v, Reason=%s",
-				manager.owner,newBestPath.GetNlri(), newBestPath.GetNlri().String(), newBestPath.GetNexthop(), reason)
+//			log.Debugf("new best path. Owner=%v, Prefix=%v, Peer=%v, Nexthop=%v, Reason=%s",
+//				manager.owner,newBestPath.GetNlri(), newBestPath.GetNlri().String(), newBestPath.GetNexthop(), reason)
 
 			newPaths = append(newPaths, newBestPath)
 			destination.setBestPath(newBestPath)
