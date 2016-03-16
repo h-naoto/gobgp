@@ -1734,8 +1734,8 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		return []*Peer{peer}, err
 	}
 
-	sortedDsts := func(id string, t *table.Table) []*api.Destination {
-		results := make([]*api.Destination, 0, len(t.GetDestinations()))
+	sortedDsts := func(id string, t *table.Table) []*GrpcResponse {
+		results := make([]*GrpcResponse, 0, len(t.GetDestinations()))
 
 		r := radix.New()
 		for _, dst := range t.GetDestinations() {
@@ -1744,10 +1744,11 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 			}
 		}
 		r.Walk(func(s string, v interface{}) bool {
-			results = append(results, v.(*api.Destination))
+			results = append(results, &GrpcResponse{
+				Data: v.(*api.Destination),
+			})
 			return false
 		})
-
 		return results
 	}
 
@@ -1779,10 +1780,7 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		close(grpcReq.ResponseCh)
 	case REQ_GLOBAL_RIB, REQ_LOCAL_RIB:
 		arg := grpcReq.Data.(*api.Table)
-		d := &api.Table{
-			Type:   arg.Type,
-			Family: arg.Family,
-		}
+		var results []*GrpcResponse
 		rib := server.globalRib
 		id := table.GLOBAL_RIB_NAME
 		if grpcReq.RequestType == REQ_LOCAL_RIB {
@@ -1806,7 +1804,6 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 		switch af {
 		case bgp.RF_IPv4_UC, bgp.RF_IPv6_UC:
 			if len(arg.Destinations) > 0 {
-				dsts := []*api.Destination{}
 				f := func(id, cidr string) (bool, error) {
 					_, prefix, err := net.ParseCIDR(cidr)
 					if err != nil {
@@ -1814,7 +1811,9 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 					}
 					if dst := rib.Tables[af].GetDestination(prefix.String()); dst != nil {
 						if d := dst.ToApiStruct(id); d != nil {
-							dsts = append(dsts, d)
+							results = append(results, &GrpcResponse{
+								Data: d,
+							})
 						}
 						return true, nil
 					} else {
@@ -1844,22 +1843,19 @@ func (server *BgpServer) handleGrpc(grpcReq *GrpcRequest) []*SenderMsg {
 						}
 					}
 				}
-				d.Destinations = dsts
 			} else {
-				d.Destinations = sortedDsts(id, rib.Tables[af])
+				results = sortedDsts(id, rib.Tables[af])
 			}
 		default:
-			d.Destinations = make([]*api.Destination, 0, len(rib.Tables[af].GetDestinations()))
 			for _, dst := range rib.Tables[af].GetDestinations() {
 				if s := dst.ToApiStruct(id); s != nil {
-					d.Destinations = append(d.Destinations, s)
+					results = append(results, &GrpcResponse{
+						Data: dst,
+					})
 				}
 			}
 		}
-		grpcReq.ResponseCh <- &GrpcResponse{
-			Data: d,
-		}
-		close(grpcReq.ResponseCh)
+		go sendMultipleResponses(grpcReq, results)
 	case REQ_BMP_GLOBAL:
 		paths := server.globalRib.GetBestPathList(table.GLOBAL_RIB_NAME, server.globalRib.GetRFlist())
 		bmpmsgs := make([]*bgp.BMPMessage, 0, len(paths))

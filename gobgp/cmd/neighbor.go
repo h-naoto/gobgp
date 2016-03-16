@@ -473,9 +473,20 @@ func showNeighborRib(r string, name string, args []string) error {
 		}
 	}
 
-	rib, err := client.GetRib(context.Background(), arg)
+	revDest := []*api.Destination{}
+	stream, err := client.GetRib(context.Background(), arg)
 	if err != nil {
-		return err
+		exitWithError(err)
+	}
+
+	for {
+		d, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			exitWithError(err)
+		}
+		revDest = append(revDest, d)
 	}
 
 	isResultSorted := func(rf bgp.RouteFamily) bool {
@@ -488,7 +499,7 @@ func showNeighborRib(r string, name string, args []string) error {
 
 	dsts := []*Destination{}
 	counter := 0
-	for _, d := range rib.Destinations {
+	for _, d := range revDest {
 		dst, err := ApiStruct2Destination(d)
 		if err != nil {
 			return err
